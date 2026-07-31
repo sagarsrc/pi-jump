@@ -110,19 +110,27 @@ export default function (pi: ExtensionAPI) {
             scanned.push(scanPaneToEntry(pane, piPid, cwd));
           }
 
-          const entries = sortByLastSeen(
-            dedupeByPane(mergeEntries(registry, scanned)).filter((e) => e.tmuxPaneId !== selfCoords?.tmuxPaneId)
-          );
+          const sorted = sortByLastSeen(dedupeByPane(mergeEntries(registry, scanned)));
+          // Current session first so the user can orient.
+          const entries = [
+            ...sorted.filter((e) => e.tmuxPaneId === selfCoords?.tmuxPaneId),
+            ...sorted.filter((e) => e.tmuxPaneId !== selfCoords?.tmuxPaneId),
+          ];
 
           if (entries.length === 0) {
-            ctx.ui.notify("pi-jump: no other pi sessions found", "info");
+            ctx.ui.notify("pi-jump: no pi sessions found", "info");
             return;
           }
 
-          const options = formatOptions(entries);
+          const options = formatOptions(entries, new Date(), selfCoords?.tmuxPaneId);
           const choice = await ctx.ui.select("Jump to pi session:", options);
           if (!choice) return;
           const target = entries[options.indexOf(choice)];
+
+          if (target.tmuxPaneId === selfCoords?.tmuxPaneId) {
+            ctx.ui.notify("pi-jump: already here", "info");
+            return;
+          }
 
           const jumpR = await pi.exec("tmux", ["switch-client", "-t", jumpTarget(target)], { timeout: 3000 });
           if (jumpR.code === 0) {

@@ -17,18 +17,24 @@ function truncate(s: string, max: number): string {
   return s.length <= max ? s : s.slice(0, max - 1) + "…";
 }
 
-export function formatOptions(entries: DiscoveredEntry[], now: Date = new Date()): string[] {
+export function formatOptions(
+  entries: DiscoveredEntry[],
+  now: Date = new Date(),
+  currentPaneId?: string
+): string[] {
   if (entries.length === 0) return [];
   const rows = entries.map((e) => ({
     dot: e.source === "registry" ? "●" : "○",
     name: truncate(e.name ?? basename(e.cwd), MAX_NAME),
     target: `${e.tmuxSession}:${e.tmuxWindow}`,
     age: relativeTime(e.lastSeen, now),
+    current: currentPaneId !== undefined && e.tmuxPaneId === currentPaneId,
   }));
   const nameW = Math.max(...rows.map((r) => r.name.length));
   const targetW = Math.max(...rows.map((r) => r.target.length));
   const ageW = Math.max(...rows.map((r) => r.age.length));
   return rows.map(
-    (r) => `${r.dot} ${r.name.padEnd(nameW)} │ ${r.target.padStart(targetW)} │ ${r.age.padStart(ageW)}`
+    (r) =>
+      `${r.dot} ${r.name.padEnd(nameW)} │ ${r.target.padStart(targetW)} │ ${r.age.padStart(ageW)}${r.current ? " [current]" : ""}`
   );
 }
