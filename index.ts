@@ -18,7 +18,8 @@ import {
 } from "./src/tmux";
 import { parsePs, findPiDescendant, parseLsofCwd } from "./src/ps";
 import { mergeEntries, sortByLastSeen, scanPaneToEntry, dedupeByPane } from "./src/discover";
-import { formatOptions } from "./src/format";
+import { JumpOverlay } from "./src/overlay";
+import type { DiscoveredEntry } from "./src/discover";
 
 const REGISTRY_PATH = join(homedir(), ".pi", "agent", "tmux-registry.json");
 
@@ -122,10 +123,20 @@ export default function (pi: ExtensionAPI) {
             return;
           }
 
-          const options = formatOptions(entries, new Date(), selfCoords?.tmuxPaneId);
-          const choice = await ctx.ui.select("Jump to pi session:", options);
-          if (!choice) return;
-          const target = entries[options.indexOf(choice)];
+          const chosen = await ctx.ui.custom<DiscoveredEntry | null>((tui, _theme, _kb, done) => {
+            return new JumpOverlay({
+              entries,
+              currentPaneId: selfCoords?.tmuxPaneId,
+              fetchPreview: async (paneId) => {
+                const r = await pi.exec("tmux", ["capture-pane", "-p", "-t", paneId, "-S", "-25"], { timeout: 2000 });
+                return r.code === 0 ? r.stdout : "";
+              },
+              onDone: done,
+              requestRender: () => tui.requestRender(),
+            });
+          });
+          if (!chosen) return;
+          const target = chosen;
 
           if (target.tmuxPaneId === selfCoords?.tmuxPaneId) {
             ctx.ui.notify("pi-jump: already here", "info");

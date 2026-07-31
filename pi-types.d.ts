@@ -28,6 +28,14 @@ declare module "@earendil-works/pi-coding-agent" {
     ui: {
       notify(message: string, level?: string): void;
       select(prompt: string, options: string[]): Promise<string | null>;
+      custom<T>(
+        factory: (
+          tui: { requestRender(): void },
+          theme: unknown,
+          keybinding: unknown,
+          done: (value: T) => void
+        ) => { render(width: number): string[]; handleInput(data: string): void }
+      ): Promise<T>;
     };
   }
 
