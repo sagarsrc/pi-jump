@@ -154,6 +154,19 @@ describe("JumpOverlay", () => {
     expect(onDone).not.toHaveBeenCalled();
   });
 
+  test("enter on empty filtered list does not lock overlay", async () => {
+    const { overlay, onDone } = makeOverlay([
+      entry(),
+      entry({ piSessionId: "s2", tmuxPaneId: "%7", name: "cryptobot", tmuxSession: "fun", tmuxWindow: "1" }),
+    ]);
+    await overlay.waitForPreview();
+    for (const ch of "zzz") overlay.handleInput(ch);
+    overlay.handleInput("enter");
+    expect(onDone).not.toHaveBeenCalled();
+    for (let i = 0; i < 3; i++) overlay.handleInput("backspace");
+    expect(overlay.render(WIDTH).join("\n")).toContain("2/2");
+  });
+
   test("preview text appears after waitForPreview", async () => {
     const { overlay } = makeOverlay([entry()], "UNIQUE_PREVIEW_TEXT");
     await overlay.waitForPreview();

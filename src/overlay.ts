@@ -53,8 +53,10 @@ export class JumpOverlay {
     if (this.done) return;
     if (matchesKey(data, Key.enter)) {
       const e = this.currentEntry();
-      if (e) this.opts.onDone(e);
-      this.done = true;
+      if (e) {
+        this.opts.onDone(e);
+        this.done = true;
+      }
       return;
     }
     if (matchesKey(data, Key.escape) || matchesKey(data, Key.ctrl("c"))) {
