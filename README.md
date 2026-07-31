@@ -9,9 +9,9 @@ https://github.com/sagarsrc/pi-jump/releases/download/v1.3.0/pi-jump-demo.mp4
 ```
   Jump to pi session:
 
-  → ● pi-tmux-conf       │    tconf:1 │ ~/work/pi-tmux-conf │  2m ago [current]
-    ○ pi-fleet-extension │ fleet-v2:1 │  ~/work/pi-fleet-ext │  1m ago
-    ○ all-configs        │     work:2 │         ~/dotfiles │ 57m ago
+  → ● nebula-dashboard │  main:1 │ ~/work/nebula         │  2m ago [current]
+    ○ chip8-emulator   │  hack:2 │ ~/code/chip8-emulator │ 15m ago
+    ○ cryptobot        │   fun:1 │ ~/fun/cryptobot       │  3h ago
 
   ↑↓ navigate  enter select  escape cancel
 ```
