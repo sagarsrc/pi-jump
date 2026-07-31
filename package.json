@@ -1,15 +1,41 @@
 {
   "name": "pi-jump",
-  "version": "0.1.0",
-  "private": true,
+  "version": "1.1.0",
+  "description": "Jump between running pi sessions across tmux windows — a session switcher extension for the pi coding agent",
+  "license": "MIT",
   "type": "module",
+  "author": "Sagar Sarkale",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sagarsrc/pi-jump.git"
+  },
+  "bugs": "https://github.com/sagarsrc/pi-jump/issues",
+  "homepage": "https://github.com/sagarsrc/pi-jump#readme",
+  "keywords": [
+    "pi-package",
+    "pi-extension",
+    "pi-coding-agent",
+    "tmux",
+    "session-switcher"
+  ],
+  "files": [
+    "index.ts",
+    "src/",
+    "pi-types.d.ts"
+  ],
   "scripts": {
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*"
   },
   "devDependencies": {
     "@types/node": "^26.1.2",
     "typescript": "^7.0.2",
     "vitest": "^4.1.10"
+  },
+  "pi": {
+    "extensions": ["./index.ts"]
   }
 }
