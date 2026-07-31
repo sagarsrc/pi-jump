@@ -90,6 +90,12 @@ describe("formatOptions currentPaneId", () => {
 });
 
 describe("shortenCwd", () => {
+  test("does not match mid-path prefixes", () => {
+    expect(shortenCwd("/Users/sagar2/work", "/Users/sagar")).toBe("/Users/sagar2/work");
+  });
+  test("home dir itself becomes ~", () => {
+    expect(shortenCwd("/Users/sagar", "/Users/sagar")).toBe("~");
+  });
   test("replaces home prefix with ~", () => {
     expect(shortenCwd("/Users/sagar/work/api", "/Users/sagar")).toBe("~/work/api");
   });

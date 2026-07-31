@@ -20,7 +20,10 @@ function truncate(s: string, max: number): string {
 }
 
 export function shortenCwd(cwd: string, home: string): string {
-  const pretty = home && cwd.startsWith(home) ? "~" + cwd.slice(home.length) : cwd;
+  const pretty =
+    home && (cwd === home || cwd.startsWith(home + "/"))
+      ? "~" + cwd.slice(home.length)
+      : cwd;
   if (pretty.length <= MAX_CWD) return pretty;
   return "…" + pretty.slice(pretty.length - (MAX_CWD - 1));
 }
