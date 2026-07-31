@@ -1,5 +1,5 @@
 import { describe, test, expect } from "vitest";
-import { mergeEntries, sortByLastSeen, scanPaneToEntry } from "../src/discover";
+import { mergeEntries, sortByLastSeen, scanPaneToEntry, dedupeByPane } from "../src/discover";
 import type { JumpEntry } from "../src/registry";
 import type { PaneInfo } from "../src/tmux";
 
@@ -52,5 +52,24 @@ describe("scanPaneToEntry", () => {
       pid: 41049,
       lastSeen: new Date(1785517928 * 1000).toISOString(),
     });
+  });
+});
+
+describe("dedupeByPane", () => {
+  test("same pane keeps latest lastSeen", () => {
+    const old = entry({ piSessionId: "old", lastSeen: "2026-07-31T10:00:00.000Z" });
+    const fresh = entry({ piSessionId: "fresh", lastSeen: "2026-07-31T11:00:00.000Z" });
+    expect(dedupeByPane([old, fresh]).map(e => e.piSessionId)).toEqual(["fresh"]);
+    expect(dedupeByPane([fresh, old]).map(e => e.piSessionId)).toEqual(["fresh"]);
+  });
+  test("different panes all kept", () => {
+    const a = entry({ piSessionId: "a", tmuxPaneId: "%1" });
+    const b = entry({ piSessionId: "b", tmuxPaneId: "%2" });
+    expect(dedupeByPane([a, b])).toHaveLength(2);
+  });
+  test("does not mutate input", () => {
+    const input = [entry(), entry({ piSessionId: "s2", tmuxPaneId: "%2" })];
+    dedupeByPane(input);
+    expect(input).toHaveLength(2);
   });
 });
