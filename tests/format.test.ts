@@ -1,5 +1,5 @@
 import { describe, test, expect } from "vitest";
-import { relativeTime, formatOptions } from "../src/format";
+import { relativeTime, formatOptions, shortenCwd } from "../src/format";
 import type { DiscoveredEntry } from "../src/discover";
 
 const NOW = new Date("2026-07-31T12:00:00.000Z");
@@ -36,7 +36,7 @@ describe("formatOptions", () => {
   });
   test("columns separated by │ with dot marker", () => {
     const [line] = formatOptions([entry({ name: "api work" })], NOW);
-    expect(line).toBe("● api work │ work:2 │ 2m ago");
+    expect(line).toBe("● api work │ work:2 │ /work/a │ 2m ago");
   });
   test("names padded to longest name, targets and ages right-aligned", () => {
     const lines = formatOptions(
@@ -46,8 +46,8 @@ describe("formatOptions", () => {
       ],
       NOW
     );
-    expect(lines[0]).toBe("● short            │    w:9 │ 20s ago");
-    expect(lines[1]).toBe("● much longer name │ work:2 │  2d ago");
+    expect(lines[0]).toBe("● short            │    w:9 │ /work/a │ 20s ago");
+    expect(lines[1]).toBe("● much longer name │ work:2 │ /work/a │  2d ago");
   });
   test("scan entry uses hollow dot and cwd basename", () => {
     const [line] = formatOptions([entry({ source: "scan", name: undefined })], NOW);
@@ -62,11 +62,11 @@ describe("formatOptions", () => {
 describe("formatOptions currentPaneId", () => {
   test("entry matching currentPaneId gets [current] suffix", () => {
     const [line] = formatOptions([entry({ name: "here" })], NOW, "%2");
-    expect(line).toBe("● here │ work:2 │ 2m ago [current]");
+    expect(line).toBe("● here │ work:2 │ /work/a │ 2m ago [current]");
   });
   test("non-matching entries get no suffix", () => {
     const [line] = formatOptions([entry({ name: "there" })], NOW, "%99");
-    expect(line).toBe("● there │ work:2 │ 2m ago");
+    expect(line).toBe("● there │ work:2 │ /work/a │ 2m ago");
   });
   test("omitted currentPaneId marks nothing", () => {
     const [line] = formatOptions([entry({ name: "plain" })], NOW);
@@ -83,8 +83,47 @@ describe("formatOptions currentPaneId", () => {
     );
     // both lines share identical text up to end of age column
     const ageColEnd = (l: string) => l.indexOf("2m ago") + "2m ago".length;
-    expect(lines[0].slice(0, ageColEnd(lines[0]))).toBe("● cur   │ work:2 │ 2m ago");
-    expect(lines[1].slice(0, ageColEnd(lines[1]))).toBe("● other │ work:2 │ 2m ago");
+    expect(lines[0].slice(0, ageColEnd(lines[0]))).toBe("● cur   │ work:2 │ /work/a │ 2m ago");
+    expect(lines[1].slice(0, ageColEnd(lines[1]))).toBe("● other │ work:2 │ /work/a │ 2m ago");
     expect(lines[0].endsWith(" [current]")).toBe(true);
+  });
+});
+
+describe("shortenCwd", () => {
+  test("replaces home prefix with ~", () => {
+    expect(shortenCwd("/Users/sagar/work/api", "/Users/sagar")).toBe("~/work/api");
+  });
+  test("leaves non-home paths unchanged", () => {
+    expect(shortenCwd("/opt/tools/x", "/Users/sagar")).toBe("/opt/tools/x");
+  });
+  test("left-truncates long paths keeping the tail", () => {
+    const long = "/very/long/" + "segment/".repeat(10) + "tail";
+    const out = shortenCwd(long, "/Users/sagar");
+    expect(out.length).toBe(40);
+    expect(out.startsWith("…")).toBe(true);
+    expect(out.endsWith("tail")).toBe(true);
+  });
+  test("exactly 40 chars after ~ substitution is not truncated", () => {
+    const cwd = "~/".padEnd(40, "x");
+    expect(shortenCwd(cwd, "/Users/sagar")).toBe(cwd);
+  });
+});
+
+describe("formatOptions cwd column", () => {
+  test("renders cwd between target and age", () => {
+    const [line] = formatOptions([entry({ name: "api", cwd: process.env.HOME + "/work/api" })], NOW);
+    expect(line).toBe("● api │ work:2 │ ~/work/api │ 2m ago");
+  });
+  test("cwd column padded to longest cwd, marker still last", () => {
+    const lines = formatOptions(
+      [
+        entry({ name: "a", cwd: "/tmp" }),
+        entry({ piSessionId: "s2", tmuxPaneId: "%3", name: "b", cwd: process.env.HOME + "/work/pi-tmux-conf" }),
+      ],
+      NOW,
+      "%3"
+    );
+    expect(lines[0]).toBe("● a │ work:2 │ /tmp                │ 2m ago");
+    expect(lines[1]).toBe("● b │ work:2 │ ~/work/pi-tmux-conf │ 2m ago [current]");
   });
 });
