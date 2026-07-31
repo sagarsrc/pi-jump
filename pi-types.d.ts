@@ -1,3 +1,16 @@
+declare module "@earendil-works/pi-tui" {
+  export const Key: {
+    enter: string;
+    escape: string;
+    up: string;
+    down: string;
+    backspace: string;
+    ctrl(key: string): string;
+  };
+  export function matchesKey(data: string, keyId: string): boolean;
+  export function truncateToWidth(text: string, width: number, ellipsis?: string): string;
+}
+
 declare module "@earendil-works/pi-coding-agent" {
   export interface ExecResult {
     stdout: string;
