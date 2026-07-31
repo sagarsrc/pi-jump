@@ -4,13 +4,13 @@ Jump between running [pi](https://github.com/earendil-works/pi) sessions across 
 
 A [pi coding agent](https://pi.dev) extension that adds `/jump`: a picker of every live pi session on your tmux server. Hit Enter, you're there.
 
-https://github.com/sagarsrc/pi-jump/releases/download/v1.1.0/pi-jump-demo.mp4
+https://github.com/sagarsrc/pi-jump/releases/download/v1.2.0/pi-jump-demo.mp4
 
 ```
   Jump to pi session:
 
-  → ○ pi-fleet-extension │ fleet-v2:1 │  1m ago
-    ● pi-tmux-conf       │    tconf:1 │  2m ago
+  → ● pi-tmux-conf       │    tconf:1 │  2m ago [current]
+    ○ pi-fleet-extension │ fleet-v2:1 │  1m ago
     ○ all-configs        │     work:2 │ 57m ago
 
   ↑↓ navigate  enter select  escape cancel
