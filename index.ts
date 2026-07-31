@@ -24,7 +24,11 @@ const REGISTRY_PATH = join(homedir(), ".pi", "agent", "tmux-registry.json");
 export default function (pi: ExtensionAPI) {
   async function selfRegister(ctx: { sessionManager: { getSessionId(): string }; cwd: string }, name?: string) {
     if (!process.env.TMUX) return;
-    const r = await pi.exec("tmux", ["display-message", "-p", DISPLAY_FORMAT], { timeout: 3000 });
+    // Target the pane this pi process runs in; without -t tmux reports the client's active pane, which may differ.
+    const displayArgs = process.env.TMUX_PANE
+      ? ["display-message", "-p", "-t", process.env.TMUX_PANE, DISPLAY_FORMAT]
+      : ["display-message", "-p", DISPLAY_FORMAT];
+    const r = await pi.exec("tmux", displayArgs, { timeout: 3000 });
     const coords = parseDisplayMessage(r.stdout);
     if (!coords) return;
     const entries = loadRegistry(REGISTRY_PATH);
@@ -58,7 +62,10 @@ export default function (pi: ExtensionAPI) {
 
       const [panesR, selfR, psR] = await Promise.all([
         pi.exec("tmux", ["list-panes", "-a", "-F", LIST_PANES_FORMAT], { timeout: 5000 }),
-        pi.exec("tmux", ["display-message", "-p", DISPLAY_FORMAT], { timeout: 3000 }),
+        // Target this pane; untargeted display-message returns the client's active pane, not necessarily this one.
+        pi.exec("tmux", process.env.TMUX_PANE
+          ? ["display-message", "-p", "-t", process.env.TMUX_PANE, DISPLAY_FORMAT]
+          : ["display-message", "-p", DISPLAY_FORMAT], { timeout: 3000 }),
         pi.exec("ps", ["-axo", "pid,ppid,comm"], { timeout: 5000 }),
       ]);
       const panes = parseListPanes(panesR.stdout);
