@@ -166,4 +166,76 @@ describe("JumpOverlay", () => {
     await overlay.waitForPreview();
     expect(overlay.render(50).join("\n")).toContain("very-long-session-name-here:12");
   });
+
+  test("stale empty-selection preview callback cannot wipe a newer preview", async () => {
+    const { overlay } = makeOverlay([entry()], "STALE_GUARD");
+    await overlay.waitForPreview();
+    expect(overlay.render(WIDTH).join("\n")).toContain("STALE_GUARD");
+
+    // Force an old empty-list callback to fire after a newer non-empty preview is in place.
+    const o = overlay as unknown as Record<string, any>;
+    o.query = "zzz";
+    o.schedulePreview();
+    // Let the empty-list timer fire (it is now stale because the next schedule replaces it).
+    await new Promise((r) => setTimeout(r, 30));
+    o.query = "";
+    o.schedulePreview();
+    await (overlay as any).waitForPreview();
+
+    expect(overlay.render(WIDTH).join("\n")).toContain("STALE_GUARD");
+  });
+
+  test("render scrolls to show at most MAX_LIST_ROWS and keeps selection visible", async () => {
+    const entries = Array.from({ length: 15 }, (_, i) =>
+      entry({
+        piSessionId: `s${i + 1}`,
+        tmuxPaneId: `%${i + 1}`,
+        name: `proj-${i + 1}`,
+        tmuxSession: `sess-${i + 1}`,
+      })
+    );
+    const { overlay } = makeOverlay(entries);
+    await overlay.waitForPreview();
+
+    // Move selection to index 12.
+    for (let i = 0; i < 12; i++) overlay.handleInput("down");
+    await overlay.waitForPreview();
+
+    const lines = overlay.render(WIDTH);
+    const firstDivider = lines.findIndex((l) => /^─+$/.test(l));
+    const secondDivider = lines.findIndex((l, i) => /^─+$/.test(l) && i > firstDivider);
+    const listRows = lines.slice(firstDivider + 1, secondDivider);
+
+    expect(listRows.length).toBeLessThanOrEqual(10);
+    expect(listRows.some((l) => l.startsWith("→ "))).toBe(true);
+    expect(lines.join("\n")).toContain("proj-13");
+  });
+
+  test("currentEntry does not mutate selected", () => {
+    const { overlay } = makeOverlay([entry(), entry({ piSessionId: "s2", tmuxPaneId: "%7", name: "cryptobot", tmuxSession: "fun", tmuxWindow: "1" })]);
+    const o = overlay as unknown as Record<string, any>;
+    o.selected = 99;
+    const before = o.selected;
+    o.currentEntry();
+    expect(o.selected).toBe(before);
+  });
+
+  test("handleInput is a no-op after onDone fires", () => {
+    const e1 = entry();
+    const { overlay, onDone } = makeOverlay([e1]);
+    overlay.handleInput("enter");
+    expect(onDone).toHaveBeenCalledTimes(1);
+    overlay.handleInput("enter");
+    expect(onDone).toHaveBeenCalledTimes(1);
+    overlay.handleInput("down");
+    overlay.handleInput("escape");
+    expect(onDone).toHaveBeenCalledTimes(1);
+  });
+
+  test("superseded pending preview promise resolves instead of hanging", async () => {
+    const { overlay } = makeOverlay([entry()]);
+    const pending = overlay.waitForPreview();
+    overlay.handleInput("a");
+    await expect(pending).resolves.toBeUndefined();
+  });
 });

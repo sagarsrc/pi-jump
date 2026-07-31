@@ -23,7 +23,9 @@ export class JumpOverlay {
   private previewToken = 0;
   private timer?: ReturnType<typeof setTimeout>;
   private pending: Promise<void> = Promise.resolve();
+  private pendingResolve?: () => void;
   private cachedFiltered?: DiscoveredEntry[];
+  private done = false;
 
   constructor(private opts: JumpOverlayOptions) {
     this.schedulePreview();
@@ -43,18 +45,21 @@ export class JumpOverlay {
   private currentEntry(): DiscoveredEntry | undefined {
     const list = this.filtered();
     if (list.length === 0) return undefined;
-    this.selected = Math.min(this.selected, list.length - 1);
-    return list[this.selected];
+    const clamped = Math.min(this.selected, list.length - 1);
+    return list[clamped];
   }
 
   handleInput(data: string): void {
+    if (this.done) return;
     if (matchesKey(data, Key.enter)) {
       const e = this.currentEntry();
       if (e) this.opts.onDone(e);
+      this.done = true;
       return;
     }
     if (matchesKey(data, Key.escape) || matchesKey(data, Key.ctrl("c"))) {
       this.opts.onDone(null);
+      this.done = true;
       return;
     }
     if (matchesKey(data, Key.up)) {
@@ -97,10 +102,19 @@ export class JumpOverlay {
 
   private schedulePreview(): void {
     if (this.timer) clearTimeout(this.timer);
+    if (this.pendingResolve) {
+      this.pendingResolve();
+      this.pendingResolve = undefined;
+    }
     const token = ++this.previewToken;
     const delay = this.opts.previewDelayMs ?? 150;
     this.pending = new Promise<void>((resolve) => {
+      this.pendingResolve = resolve;
       this.timer = setTimeout(async () => {
+        if (token !== this.previewToken) {
+          resolve();
+          return;
+        }
         const e = this.currentEntry();
         if (!e) {
           this.previewLines = [];
@@ -148,8 +162,18 @@ export class JumpOverlay {
       width
     );
 
-    const listRows = optionLines.map((line, i) => {
-      const prefix = i === sel ? "→ " : "  ";
+    const windowSize = MAX_LIST_ROWS;
+    let start = 0;
+    if (optionLines.length > windowSize) {
+      start = Math.min(
+        Math.max(sel - Math.floor(windowSize / 2), 0),
+        optionLines.length - windowSize
+      );
+    }
+    const visibleLines = optionLines.slice(start, start + windowSize);
+    const listRows = visibleLines.map((line, i) => {
+      const actualIndex = start + i;
+      const prefix = actualIndex === sel ? "→ " : "  ";
       return truncateToWidth(prefix + line, width);
     });
 
