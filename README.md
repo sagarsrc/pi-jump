@@ -4,7 +4,7 @@ Jump between running [pi](https://github.com/earendil-works/pi) sessions across 
 
 A [pi coding agent](https://pi.dev) extension that adds `/jump`: a picker of every live pi session on your tmux server. Hit Enter, you're there.
 
-https://github.com/sagarsrc/pi-jump/releases/download/v1.2.0/pi-jump-demo.mp4
+https://github.com/sagarsrc/pi-jump/releases/download/v1.3.0/pi-jump-demo.mp4
 
 ```
   Jump to pi session:
