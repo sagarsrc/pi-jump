@@ -47,7 +47,7 @@ Single file: `~/.pi/agent/extensions/pi-jump.ts` (global, so every pi self-regis
 | `discover()` | Read registry → prune entries whose tmux pane died → merge with process-scan results for unregistered pi's |
 | `scan()` | `tmux list-panes -a` + pid/cwd correlation → find pi's without registry entries |
 | `picker()` | `ctx.ui.select` list rendering |
-| `jump()` | `tmux switch-client -t <session>:<window>` + `select-window` |
+| `jump()` | `tmux switch-client -t <session>:<window>` |
 
 ## Registry format
 
@@ -58,7 +58,7 @@ Single file: `~/.pi/agent/extensions/pi-jump.ts` (global, so every pi self-regis
   "entries": [
     {
       "piSessionId": "019fb920-...",
-      "title": "tmux switcher extension",
+      "name": "tmux switcher extension",
       "cwd": "/Users/sagar/work/pi-tmux-conf",
       "tmuxSession": "work",
       "tmuxWindow": "2",
@@ -79,7 +79,7 @@ Single file: `~/.pi/agent/extensions/pi-jump.ts` (global, so every pi self-regis
 1. `tmux list-panes -a -F '#{session_name} #I #{pane_id} #{pane_pid}'`
 2. For each pane pid, walk process tree for a `pi` process; get its cwd (`lsof -p` or `ps`)
 3. cwd → `~/.pi/agent/sessions/<encoded-cwd>/` → newest `.jsonl` = active session
-4. Entries found only via scan render with `○` and no title.
+4. Entries found only via scan render with `○` and no name.
 
 ## Picker UX
 
