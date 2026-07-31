@@ -25,6 +25,22 @@ describe("findPiDescendant", () => {
     expect(findPiDescendant(999, rows)).toBeNull();
     expect(findPiDescendant(300, rows)).toBeNull(); // pi itself is not its own descendant
   });
+  test("terminates and returns null when descendant rows form a cycle", () => {
+    const cycleRows = [
+      { pid: 100, ppid: 1, comm: "zsh" },
+      { pid: 200, ppid: 100, comm: "node" },
+      { pid: 100, ppid: 200, comm: "zsh" },
+    ];
+    expect(findPiDescendant(1, cycleRows)).toBeNull();
+  });
+  test("returns pi pid even when it sits in a cyclic descendant chain", () => {
+    const cycleRows = [
+      { pid: 100, ppid: 1, comm: "zsh" },
+      { pid: 200, ppid: 100, comm: "pi" },
+      { pid: 100, ppid: 200, comm: "zsh" },
+    ];
+    expect(findPiDescendant(1, cycleRows)).toBe(200);
+  });
 });
 
 describe("parseLsofCwd", () => {
