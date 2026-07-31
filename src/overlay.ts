@@ -192,7 +192,7 @@ export class JumpOverlay {
     const listRows = visibleLines.map((line, i) => {
       const actualIndex = start + i;
       const prefix = actualIndex === sel ? "→ " : "  ";
-      return prefix + line;
+      return truncateToWidth(prefix + line, width);
     });
 
     const previewRows = this.previewLines.map((line) =>
@@ -218,7 +218,11 @@ export class JumpOverlay {
     const coreOverhead = `${parts.dot} `.length + sep.length + parts.target.length;
     const nameBudget = Math.max(0, contentWidth - coreOverhead);
     const name =
-      nameBudget < parts.name.length ? truncate(parts.name, nameBudget) : parts.name;
+      nameBudget > 0
+        ? nameBudget < parts.name.length
+          ? truncate(parts.name, nameBudget)
+          : parts.name
+        : "";
     let row = `${parts.dot} ${name}${sep}${parts.target}`;
 
     const withAge = `${row}${sep}${parts.age.padStart(this.widths.ageW)}`;
@@ -231,6 +235,6 @@ export class JumpOverlay {
       if (withMarker.length <= contentWidth) row = withMarker;
     }
 
-    return row;
+    return truncateToWidth(row, contentWidth);
   }
 }

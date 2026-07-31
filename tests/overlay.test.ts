@@ -248,6 +248,19 @@ describe("JumpOverlay", () => {
     expect(lines.every((l) => l.length <= 30)).toBe(true);
   });
 
+  test("width 20 with pathologically long target never exceeds terminal width", async () => {
+    const { overlay } = makeOverlay([
+      entry({
+        name: "some-name",
+        tmuxSession: "extremelylongsessionnamethatexceeds",
+        tmuxWindow: "1",
+      }),
+    ]);
+    await overlay.waitForPreview();
+    const lines = overlay.render(20);
+    expect(lines.every((l) => l.length <= 20)).toBe(true);
+  });
+
   test("width 80 renders full row with all columns", async () => {
     const { overlay } = makeOverlay([
       entry({ name: "api-refactor", cwd: "/work/api-refactor-long" }),
