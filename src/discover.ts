@@ -30,3 +30,12 @@ export function scanPaneToEntry(pane: PaneInfo, piPid: number, cwd: string): Jum
     lastSeen: new Date(pane.activity * 1000).toISOString(),
   };
 }
+
+export function dedupeByPane<T extends { tmuxPaneId: string; lastSeen: string }>(entries: T[]): T[] {
+  const byPane = new Map<string, T>();
+  for (const e of entries) {
+    const existing = byPane.get(e.tmuxPaneId);
+    if (!existing || e.lastSeen > existing.lastSeen) byPane.set(e.tmuxPaneId, e);
+  }
+  return [...byPane.values()];
+}
