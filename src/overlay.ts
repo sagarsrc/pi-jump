@@ -1,7 +1,7 @@
-import { matchesKey, Key, truncateToWidth } from "@earendil-works/pi-tui";
 import { basename } from "node:path";
+import { matchesKey, Key, truncateToWidth } from "@earendil-works/pi-tui";
 import type { DiscoveredEntry } from "./discover";
-import { formatOptions } from "./format";
+import { computeColumnWidths, formatRow, rowParts, truncate } from "./format";
 import { fuzzyFilter } from "./fuzzy";
 import { cleanPreview, PREVIEW_LINES } from "./preview";
 
@@ -26,9 +26,19 @@ export class JumpOverlay {
   private pendingResolve?: () => void;
   private cachedFiltered?: DiscoveredEntry[];
   private done = false;
+  private widths: ReturnType<typeof computeColumnWidths>;
 
   constructor(private opts: JumpOverlayOptions) {
+    const parts = opts.entries.map((e) => rowParts(e, new Date(), opts.currentPaneId));
+    this.widths = computeColumnWidths(parts);
     this.schedulePreview();
+  }
+
+  dispose(): void {
+    if (this.timer) {
+      clearTimeout(this.timer);
+      this.timer = undefined;
+    }
   }
 
   private filtered(): DiscoveredEntry[] {
@@ -54,12 +64,14 @@ export class JumpOverlay {
     if (matchesKey(data, Key.enter)) {
       const e = this.currentEntry();
       if (e) {
+        this.dispose();
         this.opts.onDone(e);
         this.done = true;
       }
       return;
     }
     if (matchesKey(data, Key.escape) || matchesKey(data, Key.ctrl("c"))) {
+      this.dispose();
       this.opts.onDone(null);
       this.done = true;
       return;
@@ -150,9 +162,13 @@ export class JumpOverlay {
   }
 
   render(width: number): string[] {
+    const now = new Date();
     const list = this.filtered();
     const sel = Math.min(this.selected, Math.max(0, list.length - 1));
-    const optionLines = formatOptions(list, new Date(), this.opts.currentPaneId);
+    const contentWidth = Math.max(0, width - 2);
+    const optionLines = list.map((e) =>
+      this.renderRow(rowParts(e, now, this.opts.currentPaneId), contentWidth)
+    );
 
     // Stacked layout: list rows occupy full width, preview block below a divider.
     // This avoids the side-by-side layout that would truncate long tmux targets.
@@ -176,7 +192,7 @@ export class JumpOverlay {
     const listRows = visibleLines.map((line, i) => {
       const actualIndex = start + i;
       const prefix = actualIndex === sel ? "→ " : "  ";
-      return truncateToWidth(prefix + line, width);
+      return prefix + line;
     });
 
     const previewRows = this.previewLines.map((line) =>
@@ -192,5 +208,29 @@ export class JumpOverlay {
       ...previewRows,
       footer,
     ];
+  }
+
+  private renderRow(parts: ReturnType<typeof rowParts>, contentWidth: number): string {
+    const full = formatRow(parts, this.widths);
+    if (full.length <= contentWidth) return full;
+
+    const sep = " │ ";
+    const coreOverhead = `${parts.dot} `.length + sep.length + parts.target.length;
+    const nameBudget = Math.max(0, contentWidth - coreOverhead);
+    const name =
+      nameBudget < parts.name.length ? truncate(parts.name, nameBudget) : parts.name;
+    let row = `${parts.dot} ${name}${sep}${parts.target}`;
+
+    const withAge = `${row}${sep}${parts.age.padStart(this.widths.ageW)}`;
+    if (withAge.length <= contentWidth) {
+      row = withAge;
+    }
+
+    if (parts.current) {
+      const withMarker = `${row} [current]`;
+      if (withMarker.length <= contentWidth) row = withMarker;
+    }
+
+    return row;
   }
 }

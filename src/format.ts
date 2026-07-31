@@ -15,7 +15,7 @@ export function relativeTime(iso: string, now: Date = new Date()): string {
   return `${Math.floor(h / 24)}d ago`;
 }
 
-function truncate(s: string, max: number): string {
+export function truncate(s: string, max: number): string {
   return s.length <= max ? s : s.slice(0, max - 1) + "…";
 }
 
@@ -28,6 +28,54 @@ export function shortenCwd(cwd: string, home: string): string {
   return "…" + pretty.slice(pretty.length - (MAX_CWD - 1));
 }
 
+export interface RowParts {
+  dot: string;
+  name: string;
+  target: string;
+  cwd: string;
+  age: string;
+  current: boolean;
+}
+
+export function rowParts(
+  e: DiscoveredEntry,
+  now: Date = new Date(),
+  currentPaneId?: string,
+  home: string = homedir()
+): RowParts {
+  return {
+    dot: e.source === "registry" ? "●" : "○",
+    name: truncate(e.name ?? basename(e.cwd), MAX_NAME),
+    target: `${e.tmuxSession}:${e.tmuxWindow}`,
+    cwd: shortenCwd(e.cwd, home),
+    age: relativeTime(e.lastSeen, now),
+    current: currentPaneId !== undefined && e.tmuxPaneId === currentPaneId,
+  };
+}
+
+export interface ColumnWidths {
+  nameW: number;
+  targetW: number;
+  cwdW: number;
+  ageW: number;
+}
+
+export function computeColumnWidths(parts: RowParts[]): ColumnWidths {
+  return {
+    nameW: Math.max(...parts.map((r) => r.name.length)),
+    targetW: Math.max(...parts.map((r) => r.target.length)),
+    cwdW: Math.max(...parts.map((r) => r.cwd.length)),
+    ageW: Math.max(...parts.map((r) => r.age.length)),
+  };
+}
+
+export function formatRow(parts: RowParts, widths: ColumnWidths): string {
+  return (
+    `${parts.dot} ${parts.name.padEnd(widths.nameW)} │ ${parts.target.padStart(widths.targetW)} │ ${parts.cwd.padEnd(widths.cwdW)} │ ${parts.age.padStart(widths.ageW)}` +
+    (parts.current ? " [current]" : "")
+  );
+}
+
 export function formatOptions(
   entries: DiscoveredEntry[],
   now: Date = new Date(),
@@ -35,20 +83,7 @@ export function formatOptions(
 ): string[] {
   if (entries.length === 0) return [];
   const home = homedir();
-  const rows = entries.map((e) => ({
-    dot: e.source === "registry" ? "●" : "○",
-    name: truncate(e.name ?? basename(e.cwd), MAX_NAME),
-    target: `${e.tmuxSession}:${e.tmuxWindow}`,
-    cwd: shortenCwd(e.cwd, home),
-    age: relativeTime(e.lastSeen, now),
-    current: currentPaneId !== undefined && e.tmuxPaneId === currentPaneId,
-  }));
-  const nameW = Math.max(...rows.map((r) => r.name.length));
-  const targetW = Math.max(...rows.map((r) => r.target.length));
-  const cwdW = Math.max(...rows.map((r) => r.cwd.length));
-  const ageW = Math.max(...rows.map((r) => r.age.length));
-  return rows.map(
-    (r) =>
-      `${r.dot} ${r.name.padEnd(nameW)} │ ${r.target.padStart(targetW)} │ ${r.cwd.padEnd(cwdW)} │ ${r.age.padStart(ageW)}${r.current ? " [current]" : ""}`
-  );
+  const parts = entries.map((e) => rowParts(e, now, currentPaneId, home));
+  const widths = computeColumnWidths(parts);
+  return parts.map((p) => formatRow(p, widths));
 }

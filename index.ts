@@ -129,7 +129,8 @@ export default function (pi: ExtensionAPI) {
               currentPaneId: selfCoords?.tmuxPaneId,
               fetchPreview: async (paneId) => {
                 const r = await pi.exec("tmux", ["capture-pane", "-p", "-t", paneId, "-S", "-25"], { timeout: 2000 });
-                return r.code === 0 ? r.stdout : "";
+                if (r.code !== 0) throw new Error(r.stderr.trim() || "capture-pane failed");
+                return r.stdout;
               },
               onDone: done,
               requestRender: () => tui.requestRender(),
