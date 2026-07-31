@@ -58,3 +58,33 @@ describe("formatOptions", () => {
     expect(line.startsWith("● " + "x".repeat(31) + "… ")).toBe(true);
   });
 });
+
+describe("formatOptions currentPaneId", () => {
+  test("entry matching currentPaneId gets [current] suffix", () => {
+    const [line] = formatOptions([entry({ name: "here" })], NOW, "%2");
+    expect(line).toBe("● here │ work:2 │ 2m ago [current]");
+  });
+  test("non-matching entries get no suffix", () => {
+    const [line] = formatOptions([entry({ name: "there" })], NOW, "%99");
+    expect(line).toBe("● there │ work:2 │ 2m ago");
+  });
+  test("omitted currentPaneId marks nothing", () => {
+    const [line] = formatOptions([entry({ name: "plain" })], NOW);
+    expect(line.endsWith("[current]")).toBe(false);
+  });
+  test("marker does not shift column alignment of other rows", () => {
+    const lines = formatOptions(
+      [
+        entry({ name: "cur" }),
+        entry({ piSessionId: "s2", tmuxPaneId: "%3", name: "other" }),
+      ],
+      NOW,
+      "%2"
+    );
+    // both lines share identical text up to end of age column
+    const ageColEnd = (l: string) => l.indexOf("2m ago") + "2m ago".length;
+    expect(lines[0].slice(0, ageColEnd(lines[0]))).toBe("● cur   │ work:2 │ 2m ago");
+    expect(lines[1].slice(0, ageColEnd(lines[1]))).toBe("● other │ work:2 │ 2m ago");
+    expect(lines[0].endsWith(" [current]")).toBe(true);
+  });
+});
