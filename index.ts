@@ -8,6 +8,7 @@ import {
   pruneEntries,
   type JumpEntry,
 } from "./src/registry";
+import { shouldSelfRegister } from "./src/guard";
 import {
   LIST_PANES_FORMAT,
   DISPLAY_FORMAT,
@@ -16,8 +17,8 @@ import {
   jumpTarget,
 } from "./src/tmux";
 import { parsePs, findPiDescendant, parseLsofCwd } from "./src/ps";
-import { mergeEntries, sortByLastSeen, scanPaneToEntry } from "./src/discover";
-import { formatOption } from "./src/format";
+import { mergeEntries, sortByLastSeen, scanPaneToEntry, dedupeByPane } from "./src/discover";
+import { formatOptions } from "./src/format";
 
 const REGISTRY_PATH = join(homedir(), ".pi", "agent", "tmux-registry.json");
 
@@ -27,7 +28,7 @@ export default function (pi: ExtensionAPI) {
     name?: string,
     explicitName = false
   ) {
-    if (!process.env.TMUX) return;
+    if (!shouldSelfRegister(Boolean(process.stdout.isTTY), process.env.TMUX)) return;
     try {
       // Target the pane this pi process runs in; without -t tmux reports the client's active pane, which may differ.
       const displayArgs = process.env.TMUX_PANE
@@ -110,7 +111,7 @@ export default function (pi: ExtensionAPI) {
           }
 
           const entries = sortByLastSeen(
-            mergeEntries(registry, scanned).filter((e) => e.tmuxPaneId !== selfCoords?.tmuxPaneId)
+            dedupeByPane(mergeEntries(registry, scanned)).filter((e) => e.tmuxPaneId !== selfCoords?.tmuxPaneId)
           );
 
           if (entries.length === 0) {
@@ -118,7 +119,7 @@ export default function (pi: ExtensionAPI) {
             return;
           }
 
-          const options = entries.map((e) => formatOption(e));
+          const options = formatOptions(entries);
           const choice = await ctx.ui.select("Jump to pi session:", options);
           if (!choice) return;
           const target = entries[options.indexOf(choice)];
