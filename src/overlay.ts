@@ -271,7 +271,7 @@ export class JumpOverlay {
     const nameBudget = Math.max(0, contentWidth - coreW);
     const name =
       nameBudget > 0 && visibleWidth(parts.name) > nameBudget
-        ? truncateToWidth(parts.name, nameBudget, "")
+        ? truncateToWidth(parts.name, nameBudget, "…")
         : parts.name;
     let row = dotPrefix + name + sep + parts.target;
 
@@ -285,6 +285,6 @@ export class JumpOverlay {
       if (visibleWidth(withMarker) <= contentWidth) row = withMarker;
     }
 
-    return truncateToWidth(row, contentWidth, "");
+    return truncateToWidth(row, contentWidth, "…");
   }
 }

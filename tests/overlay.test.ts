@@ -297,6 +297,20 @@ describe("JumpOverlay", () => {
     expect(lines.every((l) => l.length <= 40)).toBe(true);
   });
 
+  test("width 40 truncates long name with ellipsis and keeps full tmux target", () => {
+    const longName = "a-really-long-pi-session-name-name-name";
+    const session = "very-long-session-name-here";
+    const target = `${session}:12`;
+    const { overlay } = makeOverlay([
+      entry({ name: longName, tmuxSession: session, tmuxWindow: "12" }),
+    ]);
+    const lines = overlay.render(40);
+    const row = lines.find((l) => l.includes(target));
+    expect(row).toBeDefined();
+    expect(row).toContain("…");
+    expect(lines.every((l) => l.length <= 40)).toBe(true);
+  });
+
   test("width 30 truncates name but never the target", () => {
     const longName = "a-really-long-pi-session-name-name-name";
     const { overlay } = makeOverlay([entry({ name: longName, tmuxSession: "s", tmuxWindow: "1" })]);
