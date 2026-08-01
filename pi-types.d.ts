@@ -42,7 +42,11 @@ declare module "@earendil-works/pi-coding-agent" {
           keybinding: unknown,
           done: (value: T) => void
         ) => { render(width: number): string[]; handleInput(data: string): void },
-        options?: { overlay?: boolean; overlayOptions?: CustomOverlayOptions }
+        options?: {
+          overlay?: boolean;
+          overlayOptions?: CustomOverlayOptions;
+          onHandle?: (handle: { focus(): void; unfocus(opts?: { target: unknown }): void; setHidden(h: boolean): void; hide(): void }) => void;
+        }
       ): Promise<T>;
     };
   }

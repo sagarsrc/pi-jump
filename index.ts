@@ -158,7 +158,13 @@ export default function (pi: ExtensionAPI) {
             theme: theme as JumpTheme,
           });
         },
-        { overlay: true, overlayOptions: { anchor: "center", width: "80%", maxHeight: "85%" } }
+        {
+          overlay: true,
+          overlayOptions: { anchor: "center", width: "80%", maxHeight: "85%" },
+          // Overlay mode does not auto-focus: without this, keystrokes go to
+          // the editor behind the modal.
+          onHandle: (handle: { focus(): void }) => handle.focus(),
+        }
       );
           if (!chosen) return;
           const target = chosen;
