@@ -24,8 +24,8 @@ https://github.com/sagarsrc/pi-jump/releases/download/v2.1.2/pi-jump-demo.mp4
 ╰───────────────────────────────────────────────────╯
 ```
 
-- `●` registered session (shows the name you gave it with `/name`)
-- `○` detected via process scan (shows the project directory)
+- `●` your current session — everything else is `○`
+- Scan-detected sessions (pi running without the extension) appear dimmed
 - Columns: session name │ tmux `session:window` (never truncated) │ cwd (`~` = home) │ age — columns adapt to width, always aligned
 - Preview: live tail of the highlighted pane, with the target's status line cropped out
 
