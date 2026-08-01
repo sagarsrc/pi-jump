@@ -24,3 +24,16 @@ describe("cleanPreview", () => {
     expect(cleanPreview(raw)).toHaveLength(20);
   });
 });
+
+describe("cleanPreview cropBottom", () => {
+  test("drops bottom N lines after trailing-blank strip", () => {
+    const raw = "keep1\nkeep2\nchrome1\nchrome2\nchrome3\nchrome4\n";
+    expect(cleanPreview(raw, 20, 4)).toEqual(["keep1", "keep2"]);
+  });
+  test("cropBottom 0 behaves as before", () => {
+    expect(cleanPreview("a\nb\n", 20, 0)).toEqual(["a", "b"]);
+  });
+  test("crop larger than content returns empty", () => {
+    expect(cleanPreview("a\nb\n", 20, 10)).toEqual([]);
+  });
+});
