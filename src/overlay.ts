@@ -1,7 +1,7 @@
 import { basename } from "node:path";
 import { matchesKey, Key, truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import type { DiscoveredEntry } from "./discover";
-import { computeColumnWidths, formatRow, rowParts, truncate } from "./format";
+import { rowParts, type RowParts } from "./format";
 import { fuzzyFilter } from "./fuzzy";
 import { cleanPreview } from "./preview";
 import { boxBottom, labelDivider } from "./box";
@@ -35,13 +35,30 @@ function padToWidth(s: string, w: number): string {
   return s + " ".repeat(Math.max(0, w - visibleWidth(s)));
 }
 
+function padStartToWidth(s: string, w: number): string {
+  return " ".repeat(Math.max(0, w - visibleWidth(s))) + s;
+}
+
+interface ColumnWidths {
+  nameW: number;
+  targetW: number;
+  cwdW: number;
+  ageW: number;
+}
+
+/** Which optional columns every row shows — decided GLOBALLY so all rows align. */
+interface ColumnPlan {
+  cwd: boolean;
+  age: boolean;
+}
+
 export class JumpOverlay {
   private query = "";
   private selected = 0;
   private previewLines: string[] = [];
   private cachedFiltered?: DiscoveredEntry[];
   private done = false;
-  private widths: ReturnType<typeof computeColumnWidths>;
+  private widths: ColumnWidths;
   private previewLabel: (e: DiscoveredEntry) => string;
 
   constructor(private opts: JumpOverlayOptions) {
@@ -50,7 +67,12 @@ export class JumpOverlay {
       ((e) => `preview: ${e.name ?? basename(e.cwd)} (${e.tmuxSession}:${e.tmuxWindow})`);
 
     const parts = opts.entries.map((e) => rowParts(e, new Date(), opts.currentPaneId));
-    this.widths = computeColumnWidths(parts);
+    this.widths = {
+      nameW: Math.max(...parts.map((r) => visibleWidth(r.name))),
+      targetW: Math.max(...parts.map((r) => visibleWidth(r.target))),
+      cwdW: Math.max(...parts.map((r) => visibleWidth(r.cwd))),
+      ageW: Math.max(...parts.map((r) => visibleWidth(r.age))),
+    };
     this.loadPreview();
   }
 
@@ -202,8 +224,9 @@ export class JumpOverlay {
     const sel = list.length > 0 ? Math.min(this.selected, list.length - 1) : -1;
     const contentW = Math.max(0, innerW - 2);
 
+    const plan = this.columnPlan(contentW);
     const optionLines = list.map((e) =>
-      this.renderRow(rowParts(e, now, this.opts.currentPaneId), contentW)
+      this.renderRow(rowParts(e, now, this.opts.currentPaneId), contentW, plan)
     );
 
     let start = 0;
@@ -260,24 +283,35 @@ export class JumpOverlay {
     return this.borderRow(content);
   }
 
-  private renderRow(parts: ReturnType<typeof rowParts>, contentWidth: number): string {
-    const full = formatRow(parts, this.widths);
-    if (visibleWidth(full) <= contentWidth) return full;
+  private columnPlan(contentW: number): ColumnPlan {
+    const sepW = " │ ".length;
+    const base = 2 /* dot+space */ + this.widths.nameW + sepW + this.widths.targetW;
+    if (base + sepW + this.widths.cwdW + sepW + this.widths.ageW <= contentW) {
+      return { cwd: true, age: true };
+    }
+    if (base + sepW + this.widths.ageW <= contentW) {
+      return { cwd: false, age: true };
+    }
+    return { cwd: false, age: false };
+  }
 
+  private renderRow(parts: RowParts, contentWidth: number, plan: ColumnPlan): string {
     const sep = " │ ";
-    const dotPrefix = `${parts.dot} `;
-    const core = dotPrefix + sep + parts.target;
-    const coreW = visibleWidth(core);
-    const nameBudget = Math.max(0, contentWidth - coreW);
     const name =
-      nameBudget > 0 && visibleWidth(parts.name) > nameBudget
-        ? truncateToWidth(parts.name, nameBudget, "…")
-        : parts.name;
-    let row = dotPrefix + name + sep + parts.target;
+      visibleWidth(parts.name) > this.widths.nameW
+        ? truncateToWidth(parts.name, this.widths.nameW, "…")
+        : padToWidth(parts.name, this.widths.nameW);
+    const target = padStartToWidth(parts.target, this.widths.targetW);
+    let row = `${parts.dot} ${name}${sep}${target}`;
+    if (plan.cwd) row += sep + padToWidth(parts.cwd, this.widths.cwdW);
+    if (plan.age) row += sep + padStartToWidth(parts.age, this.widths.ageW);
 
-    const withAge = row + sep + parts.age.padStart(this.widths.ageW);
-    if (visibleWidth(withAge) <= contentWidth) {
-      row = withAge;
+    if (visibleWidth(row) > contentWidth) {
+      // Even name+target overflows: truncate the name — target is sacred.
+      const coreW = visibleWidth(`${parts.dot} `) + sep.length + visibleWidth(target);
+      const budget = Math.max(0, contentWidth - coreW);
+      const trimmed = budget > 0 ? truncateToWidth(parts.name, budget, "…") : "";
+      row = `${parts.dot} ${trimmed}${sep}${target}`;
     }
 
     if (parts.current) {

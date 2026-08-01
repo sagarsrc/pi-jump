@@ -463,3 +463,31 @@ describe("JumpOverlay modal frame", () => {
     }
   });
 });
+
+describe("uniform column plan (padding consistency)", () => {
+  test("all rows drop the same columns when space is tight", () => {
+    // One row with a very long cwd would alone overflow; the other would fit.
+    // Column inclusion must be decided globally so separators align.
+    const { overlay } = makeOverlay([
+      entry({ name: "a", cwd: "/extremely/long/working/directory/path/that/is/quite/big", tmuxSession: "work", tmuxWindow: "1" }),
+      entry({ piSessionId: "s2", tmuxPaneId: "%7", name: "b", cwd: "/tmp", tmuxSession: "w", tmuxWindow: "2" }),
+    ]);
+    const lines = overlay.render(60);
+    const rows = lines.filter((l) => l.includes("●"));
+    expect(rows.length).toBe(2);
+    const seps = rows.map((r) => (r.match(/│/g) ?? []).length);
+    expect(seps[0]).toBe(seps[1]);
+  });
+
+  test("when all rows fit, every row has all columns", () => {
+    const { overlay } = makeOverlay([
+      entry({ name: "a", cwd: "/tmp" }),
+      entry({ piSessionId: "s2", tmuxPaneId: "%7", name: "b", cwd: "/var" }),
+    ]);
+    const lines = overlay.render(120);
+    const rows = lines.filter((l) => l.includes("●"));
+    const seps = rows.map((r) => (r.match(/│/g) ?? []).length);
+    // box borders (2) + 3 column separators per row
+    expect(seps).toEqual([5, 5]);
+  });
+});
