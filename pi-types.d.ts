@@ -23,6 +23,12 @@ declare module "@earendil-works/pi-coding-agent" {
     timeout?: number;
   }
 
+  export interface CustomOverlayOptions {
+    anchor?: "center" | "top" | "bottom" | "left" | "right";
+    width?: string;
+    maxHeight?: string;
+  }
+
   export interface ExtensionContext {
     sessionManager: { getSessionId(): string };
     cwd: string;
@@ -35,7 +41,8 @@ declare module "@earendil-works/pi-coding-agent" {
           theme: unknown,
           keybinding: unknown,
           done: (value: T) => void
-        ) => { render(width: number): string[]; handleInput(data: string): void }
+        ) => { render(width: number): string[]; handleInput(data: string): void },
+        options?: { overlay?: boolean; overlayOptions?: CustomOverlayOptions }
       ): Promise<T>;
     };
   }

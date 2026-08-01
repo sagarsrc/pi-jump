@@ -147,16 +147,19 @@ export default function (pi: ExtensionAPI) {
             })
           );
 
-          const chosen = await ctx.ui.custom<DiscoveredEntry | null>((tui, _theme, _kb, done) => {
-            return new JumpOverlay({
-              entries,
-              currentPaneId: selfCoords?.tmuxPaneId,
-              getPreview: (paneId) => previews.get(paneId),
-              onDone: done,
-              requestRender: () => tui.requestRender(),
-              theme: _theme as JumpTheme,
-            });
+      const chosen = await ctx.ui.custom<DiscoveredEntry | null>(
+        (tui, theme, _kb, done) => {
+          return new JumpOverlay({
+            entries,
+            currentPaneId: selfCoords?.tmuxPaneId,
+            getPreview: (paneId) => previews.get(paneId),
+            onDone: done,
+            requestRender: () => tui.requestRender(),
+            theme: theme as JumpTheme,
           });
+        },
+        { overlay: true, overlayOptions: { anchor: "center", width: "80%", maxHeight: "85%" } }
+      );
           if (!chosen) return;
           const target = chosen;
 
