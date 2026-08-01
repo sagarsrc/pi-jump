@@ -1,6 +1,6 @@
 {
   "name": "pi-jump",
-  "version": "2.1.1",
+  "version": "2.1.2",
   "description": "Jump between running pi sessions across tmux windows — a session switcher extension for the pi coding agent",
   "license": "MIT",
   "type": "module",
@@ -40,6 +40,6 @@
     "extensions": [
       "./index.ts"
     ],
-    "video": "https://github.com/sagarsrc/pi-jump/releases/download/v1.3.0/pi-jump-demo.mp4"
+    "video": "https://github.com/sagarsrc/pi-jump/releases/download/v2.1.2/pi-jump-demo.mp4"
   }
 }

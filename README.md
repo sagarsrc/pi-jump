@@ -4,21 +4,30 @@ Jump between running [pi](https://github.com/earendil-works/pi) sessions across 
 
 A [pi coding agent](https://pi.dev) extension that adds `/jump`: a picker of every live pi session on your tmux server. Hit Enter, you're there.
 
-https://github.com/sagarsrc/pi-jump/releases/download/v1.3.0/pi-jump-demo.mp4
+https://github.com/sagarsrc/pi-jump/releases/download/v2.1.2/pi-jump-demo.mp4
+
+<img src="https://github.com/sagarsrc/pi-jump/releases/download/v2.1.2/pi-jump-modal.png" alt="pi-jump modal picker" width="900">
 
 ```
-  Jump to pi session:
-
-  → ● sidequest      │  main:1 │ ~/code/game-engine    │  2m ago [current]
-    ○ chip8-emulator │  hack:2 │ ~/code/chip8-emulator │ 15m ago
-    ○ cryptobot      │   fun:1 │ ~/fun/cryptobot       │  3h ago
-
-  ↑↓ navigate  enter select  escape cancel
+╭──────────────────── ◈ pi-jump ────────────────────╮
+│ ❯ med█                                            │
+│───────────────────────────────────────────────────│
+│ → ● sidequest      │ main:1 │  2m ago [current]   │
+│   ● media-project  │ work:1 │ 37m ago             │
+│   ○ cryptobot      │  fun:1 │  3h ago             │
+│┄┄┄┄┄┄┄┄┄ preview: media-project (work:1) ┄┄┄┄┄┄┄┄┄│
+│   $ npm run dev                                   │
+│   ✓ built in 380ms                                │
+│   ➜ Local: http://localhost:5173                  │
+│                                                   │
+│ ↑↓ move · type to filter · ⏎ jump · esc close     │
+╰───────────────────────────────────────────────────╯
 ```
 
 - `●` registered session (shows the name you gave it with `/name`)
 - `○` detected via process scan (shows the project directory)
-- Columns: session name │ tmux `session:window` │ cwd (`~` = your home) │ last activity
+- Columns: session name │ tmux `session:window` (never truncated) │ cwd (`~` = home) │ age — columns adapt to width, always aligned
+- Preview: live tail of the highlighted pane, with the target's status line cropped out
 
 ## Why
 
