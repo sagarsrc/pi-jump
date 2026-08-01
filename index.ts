@@ -4,6 +4,20 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
 const execFileP = promisify(execFile);
+
+/**
+ * pi.exec never settles while a ui.custom component is open (and right after it
+ * closes). Use child_process for every external command in this extension.
+ */
+async function run(cmd: string, args: string[]): Promise<{ code: number; stdout: string; stderr: string }> {
+  try {
+    const { stdout, stderr } = await execFileP(cmd, args, { timeout: 5000 });
+    return { code: 0, stdout, stderr };
+  } catch (err) {
+    const e = err as { code?: number; stdout?: string; stderr?: string };
+    return { code: typeof e.code === "number" ? e.code : 1, stdout: e.stdout ?? "", stderr: e.stderr ?? String(err) };
+  }
+}
 import { join } from "node:path";
 import {
   loadRegistry,
@@ -24,6 +38,7 @@ import { parsePs, findPiDescendant, parseLsofCwd } from "./src/ps";
 import { mergeEntries, sortByLastSeen, scanPaneToEntry, dedupeByPane } from "./src/discover";
 import { JumpOverlay } from "./src/overlay";
 import type { DiscoveredEntry } from "./src/discover";
+import type { JumpTheme } from "./src/overlay";
 
 const REGISTRY_PATH = join(homedir(), ".pi", "agent", "tmux-registry.json");
 
@@ -39,7 +54,7 @@ export default function (pi: ExtensionAPI) {
       const displayArgs = process.env.TMUX_PANE
         ? ["display-message", "-p", "-t", process.env.TMUX_PANE, DISPLAY_FORMAT]
         : ["display-message", "-p", DISPLAY_FORMAT];
-      const r = await pi.exec("tmux", displayArgs, { timeout: 3000 });
+      const r = await run("tmux", displayArgs);
       const coords = parseDisplayMessage(r.stdout);
       if (!coords) return;
       const entries = loadRegistry(REGISTRY_PATH);
@@ -80,12 +95,12 @@ export default function (pi: ExtensionAPI) {
       try {
         while (true) {
           const [panesR, selfR, psR] = await Promise.all([
-            pi.exec("tmux", ["list-panes", "-a", "-F", LIST_PANES_FORMAT], { timeout: 5000 }),
+            run("tmux", ["list-panes", "-a", "-F", LIST_PANES_FORMAT]),
             // Target this pane; untargeted display-message returns the client's active pane, not necessarily this one.
-            pi.exec("tmux", process.env.TMUX_PANE
+            run("tmux", process.env.TMUX_PANE
               ? ["display-message", "-p", "-t", process.env.TMUX_PANE, DISPLAY_FORMAT]
-              : ["display-message", "-p", DISPLAY_FORMAT], { timeout: 3000 }),
-            pi.exec("ps", ["-axo", "pid,ppid,comm"], { timeout: 5000 }),
+              : ["display-message", "-p", DISPLAY_FORMAT]),
+            run("ps", ["-axo", "pid,ppid,comm"]),
           ]);
 
           if (panesR.code !== 0) {
@@ -109,7 +124,7 @@ export default function (pi: ExtensionAPI) {
             if (registeredPanes.has(pane.tmuxPaneId)) continue;
             const piPid = findPiDescendant(pane.pid, rows);
             if (piPid === null) continue;
-            const lsofR = await pi.exec("lsof", ["-a", "-p", String(piPid), "-d", "cwd", "-Fn"], { timeout: 3000 });
+            const lsofR = await run("lsof", ["-a", "-p", String(piPid), "-d", "cwd", "-Fn"]);
             const cwd = parseLsofCwd(lsofR.stdout);
             if (!cwd) continue;
             scanned.push(scanPaneToEntry(pane, piPid, cwd));
@@ -146,15 +161,25 @@ export default function (pi: ExtensionAPI) {
             })
           );
 
-          const chosen = await ctx.ui.custom<DiscoveredEntry | null>((tui, _theme, _kb, done) => {
-            return new JumpOverlay({
-              entries,
-              currentPaneId: selfCoords?.tmuxPaneId,
-              getPreview: (paneId) => previews.get(paneId),
-              onDone: done,
-              requestRender: () => tui.requestRender(),
-            });
+      const chosen = await ctx.ui.custom<DiscoveredEntry | null>(
+        (tui, theme, _kb, done) => {
+          return new JumpOverlay({
+            entries,
+            currentPaneId: selfCoords?.tmuxPaneId,
+            getPreview: (paneId) => previews.get(paneId),
+            onDone: done,
+            requestRender: () => tui.requestRender(),
+            theme: theme as JumpTheme,
           });
+        },
+        {
+          overlay: true,
+          overlayOptions: { anchor: "center", width: "80%", maxHeight: "85%" },
+          // Overlay mode does not auto-focus: without this, keystrokes go to
+          // the editor behind the modal.
+          onHandle: (handle: { focus(): void }) => handle.focus(),
+        }
+      );
           if (!chosen) return;
           const target = chosen;
 
@@ -163,7 +188,18 @@ export default function (pi: ExtensionAPI) {
             return;
           }
 
-          const jumpR = await pi.exec("tmux", ["switch-client", "-t", jumpTarget(target)], { timeout: 3000 });
+          // Resolve the client that owns OUR pane — with multiple tmux clients
+          // attached, bare switch-client picks an arbitrary one.
+          let switchArgs = ["switch-client", "-t", jumpTarget(target)];
+          if (process.env.TMUX_PANE) {
+            const clientR = await run(
+              "tmux",
+              ["display-message", "-p", "-t", process.env.TMUX_PANE, "#{client_tty}"]
+            );
+            const client = clientR.code === 0 ? clientR.stdout.trim() : "";
+            if (client) switchArgs = ["switch-client", "-c", client, "-t", jumpTarget(target)];
+          }
+          const jumpR = await run("tmux", switchArgs);
           if (jumpR.code === 0) {
             return;
           }

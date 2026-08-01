@@ -9,6 +9,7 @@ declare module "@earendil-works/pi-tui" {
   };
   export function matchesKey(data: string, keyId: string): boolean;
   export function truncateToWidth(text: string, width: number, ellipsis?: string): string;
+  export function visibleWidth(text: string): number;
 }
 
 declare module "@earendil-works/pi-coding-agent" {
@@ -20,6 +21,12 @@ declare module "@earendil-works/pi-coding-agent" {
 
   export interface ExecOptions {
     timeout?: number;
+  }
+
+  export interface CustomOverlayOptions {
+    anchor?: "center" | "top" | "bottom" | "left" | "right";
+    width?: string;
+    maxHeight?: string;
   }
 
   export interface ExtensionContext {
@@ -34,7 +41,12 @@ declare module "@earendil-works/pi-coding-agent" {
           theme: unknown,
           keybinding: unknown,
           done: (value: T) => void
-        ) => { render(width: number): string[]; handleInput(data: string): void }
+        ) => { render(width: number): string[]; handleInput(data: string): void },
+        options?: {
+          overlay?: boolean;
+          overlayOptions?: CustomOverlayOptions;
+          onHandle?: (handle: { focus(): void; unfocus(opts?: { target: unknown }): void; setHidden(h: boolean): void; hide(): void }) => void;
+        }
       ): Promise<T>;
     };
   }
