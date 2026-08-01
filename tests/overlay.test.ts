@@ -1,5 +1,6 @@
 import { describe, test, expect, vi } from "vitest";
-import { JumpOverlay } from "../src/overlay";
+import { JumpOverlay, MODAL_LIST_ROWS, MODAL_PREVIEW_ROWS, MODAL_FRAME_LINES } from "../src/overlay";
+import type { JumpOverlayOptions, JumpTheme } from "../src/overlay";
 import type { DiscoveredEntry } from "../src/discover";
 
 // Minimal mock for the peer/bundled pi-tui package so unit tests resolve.
@@ -63,16 +64,31 @@ const entry = (over: Partial<DiscoveredEntry> = {}): DiscoveredEntry => ({
   ...over,
 });
 
-function makeOverlay(entries: DiscoveredEntry[], previewText: string | undefined = "$ npm run dev") {
+const identityTheme: JumpTheme = {
+  fg: (_c: string, t: string) => t,
+  bg: (_c: string, t: string) => t,
+};
+
+function makeOverlayWithTheme(
+  entries: DiscoveredEntry[],
+  theme: JumpTheme,
+  previewText: string | undefined = "$ npm run dev",
+  currentPaneId = "%3"
+) {
   const onDone = vi.fn();
   const overlay = new JumpOverlay({
     entries,
-    currentPaneId: "%3",
+    currentPaneId,
     getPreview: () => previewText,
     onDone,
     requestRender: () => {},
+    theme,
   });
   return { overlay, onDone };
+}
+
+function makeOverlay(entries: DiscoveredEntry[], previewText?: string) {
+  return makeOverlayWithTheme(entries, identityTheme, previewText);
 }
 
 const WIDTH = 80;
@@ -82,7 +98,7 @@ describe("JumpOverlay", () => {
     const { overlay } = makeOverlay([entry(), entry({ piSessionId: "s2", tmuxPaneId: "%7", name: "cryptobot", tmuxSession: "fun", tmuxWindow: "1" })]);
     const lines = overlay.render(WIDTH);
     const joined = lines.join("\n");
-    expect(joined).toContain("Jump to pi session");
+    expect(joined).toContain("pi-jump");
     expect(joined).toContain("api-refactor");
     expect(joined).toContain("cryptobot");
     expect(joined).toContain("[current]");
@@ -96,7 +112,7 @@ describe("JumpOverlay", () => {
     const joined = overlay.render(WIDTH).join("\n");
     expect(joined).toContain("cryptobot");
     expect(joined).not.toContain("api-refactor");
-    expect(joined).toContain("> crypt");
+    expect(joined).toContain("❯ crypt");
     expect(joined).toContain("1/2");
   });
 
@@ -182,6 +198,7 @@ describe("JumpOverlay", () => {
       getPreview: (id) => previews.get(id),
       onDone,
       requestRender: () => {},
+      theme: identityTheme,
     });
     expect(overlay.render(WIDTH).join("\n")).toContain("FIRST_PANE");
     overlay.handleInput("down");
@@ -196,6 +213,7 @@ describe("JumpOverlay", () => {
       getPreview: () => undefined,
       onDone: vi.fn(),
       requestRender: () => {},
+      theme: identityTheme,
     });
     expect(overlay.render(WIDTH).join("\n")).toContain("(no preview)");
   });
@@ -211,7 +229,7 @@ describe("JumpOverlay", () => {
     expect(overlay.render(50).join("\n")).toContain("very-long-session-name-here:12");
   });
 
-  test("render scrolls to show at most MAX_LIST_ROWS and keeps selection visible", () => {
+  test("render scrolls to show at most MODAL_LIST_ROWS and keeps selection visible", () => {
     const entries = Array.from({ length: 15 }, (_, i) =>
       entry({
         piSessionId: `s${i + 1}`,
@@ -226,12 +244,10 @@ describe("JumpOverlay", () => {
     for (let i = 0; i < 12; i++) overlay.handleInput("down");
 
     const lines = overlay.render(WIDTH);
-    const firstDivider = lines.findIndex((l) => /^─+$/.test(l));
-    const secondDivider = lines.findIndex((l, i) => /^─+$/.test(l) && i > firstDivider);
-    const listRows = lines.slice(firstDivider + 1, secondDivider);
+    const listRows = lines.slice(3, 3 + MODAL_LIST_ROWS);
 
-    expect(listRows.length).toBeLessThanOrEqual(10);
-    expect(listRows.some((l) => l.startsWith("→ "))).toBe(true);
+    expect(listRows.length).toBe(MODAL_LIST_ROWS);
+    expect(listRows.some((l) => l.includes("→ "))).toBe(true);
     expect(lines.join("\n")).toContain("proj-13");
   });
 
@@ -315,40 +331,69 @@ describe("JumpOverlay", () => {
   });
 });
 
-describe("JumpOverlay constant height (TUI clipping regression)", () => {
-  test("render line count is exactly the fixed frame size on open", () => {
+describe("JumpOverlay modal frame", () => {
+  const identityTheme = { fg: (_c: string, t: string) => t, bg: (_c: string, t: string) => t };
+
+  test("frame has exact constant line count", () => {
     const { overlay } = makeOverlay([entry()]);
-    const before = overlay.render(WIDTH).length;
-    // title + query + divider + 10 list rows + divider + 20 preview rows + footer
-    expect(before).toBe(1 + 1 + 1 + 10 + 1 + 20 + 1);
+    expect(overlay.render(80).length).toBe(MODAL_FRAME_LINES);
   });
 
-  test("render line count stays constant while filtering", () => {
+  test("frame line count constant across filter and nav", () => {
     const { overlay } = makeOverlay([
       entry(),
       entry({ piSessionId: "s2", tmuxPaneId: "%7", name: "cryptobot", tmuxSession: "fun", tmuxWindow: "1" }),
     ]);
-    const before = overlay.render(WIDTH).length;
+    const n = overlay.render(80).length;
     for (const ch of "crypt") overlay.handleInput(ch);
-    const filtered = overlay.render(WIDTH).length;
-    expect(filtered).toBe(before);
-  });
-
-  test("render line count stays constant when navigating", () => {
-    const { overlay } = makeOverlay([
-      entry(),
-      entry({ piSessionId: "s2", tmuxPaneId: "%7", name: "cryptobot", tmuxSession: "fun", tmuxWindow: "1" }),
-    ]);
-    const before = overlay.render(WIDTH).length;
+    expect(overlay.render(80).length).toBe(n);
     overlay.handleInput("down");
-    expect(overlay.render(WIDTH).length).toBe(before);
+    expect(overlay.render(80).length).toBe(n);
   });
 
-  test("list rows never exceed 10 even with 15 entries", () => {
-    const entries = Array.from({ length: 15 }, (_, i) =>
-      entry({ piSessionId: `s${i}`, tmuxPaneId: `%${i}`, name: `session-${i}` })
-    );
-    const { overlay } = makeOverlay(entries);
-    expect(overlay.render(WIDTH).length).toBe(1 + 1 + 1 + 10 + 1 + 20 + 1);
+  test("box borders present", () => {
+    const { overlay } = makeOverlay([entry()]);
+    const lines = overlay.render(80);
+    expect(lines[0]).toMatch(/^╭.*╮$/);
+    expect(lines[lines.length - 1]).toMatch(/^╰.*╯$/);
+    expect(lines[1].startsWith("│") && lines[1].endsWith("│")).toBe(true);
+  });
+
+  test("title contains pi-jump", () => {
+    const { overlay } = makeOverlay([entry()]);
+    expect(overlay.render(80)[0]).toContain("pi-jump");
+  });
+
+  test("preview label divider names the selected session and target", () => {
+    const { overlay } = makeOverlay([entry({ name: "api-refactor" })]);
+    expect(overlay.render(80).join("\n")).toContain("preview: api-refactor (work:3)");
+  });
+
+  test("footer hints present", () => {
+    const { overlay } = makeOverlay([entry()]);
+    expect(overlay.render(80).join("\n")).toContain("esc close");
+  });
+
+  test("query line shows prompt and query", () => {
+    const { overlay } = makeOverlay([entry()]);
+    for (const ch of "ab") overlay.handleInput(ch);
+    expect(overlay.render(80).join("\n")).toContain("❯ ab");
+  });
+
+  test("selected row gets selectedBg styling", () => {
+    const markTheme = {
+      fg: (_c: string, t: string) => t,
+      bg: (c: string, t: string) => (c === "selectedBg" ? `[SEL]${t}[/SEL]` : t),
+    };
+    const { overlay } = makeOverlayWithTheme([entry()], markTheme);
+    expect(overlay.render(80).join("\n")).toContain("[SEL]");
+  });
+
+  test("every rendered line respects width accounting for borders", () => {
+    const { overlay } = makeOverlay([entry()]);
+    for (const w of [30, 50, 80]) {
+      const lines = overlay.render(w);
+      for (const l of lines) expect(l.length).toBeLessThanOrEqual(w);
+    }
   });
 });

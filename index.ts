@@ -24,6 +24,7 @@ import { parsePs, findPiDescendant, parseLsofCwd } from "./src/ps";
 import { mergeEntries, sortByLastSeen, scanPaneToEntry, dedupeByPane } from "./src/discover";
 import { JumpOverlay } from "./src/overlay";
 import type { DiscoveredEntry } from "./src/discover";
+import type { JumpTheme } from "./src/overlay";
 
 const REGISTRY_PATH = join(homedir(), ".pi", "agent", "tmux-registry.json");
 
@@ -153,6 +154,7 @@ export default function (pi: ExtensionAPI) {
               getPreview: (paneId) => previews.get(paneId),
               onDone: done,
               requestRender: () => tui.requestRender(),
+              theme: _theme as JumpTheme,
             });
           });
           if (!chosen) return;
