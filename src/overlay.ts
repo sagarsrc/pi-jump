@@ -246,7 +246,9 @@ export class JumpOverlay {
       const full = padToWidth(truncateToWidth(prefix + rawLine, innerW), innerW);
       const styled = isSelected
         ? theme.bg("selectedBg", theme.fg("text", full))
-        : theme.fg("text", full);
+        : list[actualIndex]?.source === "scan"
+          ? theme.fg("dim", full)
+          : theme.fg("text", full);
       rows.push(this.borderRow(styled));
     }
     return rows;
@@ -312,11 +314,6 @@ export class JumpOverlay {
       const budget = Math.max(0, contentWidth - coreW);
       const trimmed = budget > 0 ? truncateToWidth(parts.name, budget, "…") : "";
       row = `${parts.dot} ${trimmed}${sep}${target}`;
-    }
-
-    if (parts.current) {
-      const withMarker = row + " [current]";
-      if (visibleWidth(withMarker) <= contentWidth) row = withMarker;
     }
 
     return truncateToWidth(row, contentWidth, "…");

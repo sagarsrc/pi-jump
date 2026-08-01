@@ -35,6 +35,7 @@ export interface RowParts {
   cwd: string;
   age: string;
   current: boolean;
+  source: "registry" | "scan";
 }
 
 export function rowParts(
@@ -43,13 +44,16 @@ export function rowParts(
   currentPaneId?: string,
   home: string = homedir()
 ): RowParts {
+  const current = currentPaneId !== undefined && e.tmuxPaneId === currentPaneId;
   return {
-    dot: e.source === "registry" ? "●" : "○",
+    // ● = you are here. ○ = everything else. (Not a registry/scan marker.)
+    dot: current ? "●" : "○",
     name: truncate(e.name ?? basename(e.cwd), MAX_NAME),
     target: `${e.tmuxSession}:${e.tmuxWindow}`,
     cwd: shortenCwd(e.cwd, home),
     age: relativeTime(e.lastSeen, now),
-    current: currentPaneId !== undefined && e.tmuxPaneId === currentPaneId,
+    current,
+    source: e.source,
   };
 }
 
@@ -71,8 +75,7 @@ export function computeColumnWidths(parts: RowParts[]): ColumnWidths {
 
 export function formatRow(parts: RowParts, widths: ColumnWidths): string {
   return (
-    `${parts.dot} ${parts.name.padEnd(widths.nameW)} │ ${parts.target.padStart(widths.targetW)} │ ${parts.cwd.padEnd(widths.cwdW)} │ ${parts.age.padStart(widths.ageW)}` +
-    (parts.current ? " [current]" : "")
+    `${parts.dot} ${parts.name.padEnd(widths.nameW)} │ ${parts.target.padStart(widths.targetW)} │ ${parts.cwd.padEnd(widths.cwdW)} │ ${parts.age.padStart(widths.ageW)}`
   );
 }
 

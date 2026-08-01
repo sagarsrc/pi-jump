@@ -34,9 +34,9 @@ describe("formatOptions", () => {
   test("empty list returns empty array", () => {
     expect(formatOptions([], NOW)).toEqual([]);
   });
-  test("columns separated by │ with dot marker", () => {
+  test("columns separated by │, non-current entry gets hollow dot", () => {
     const [line] = formatOptions([entry({ name: "api work" })], NOW);
-    expect(line).toBe("● api work │ work:2 │ /work/a │ 2m ago");
+    expect(line).toBe("○ api work │ work:2 │ /work/a │ 2m ago");
   });
   test("names padded to longest name, targets and ages right-aligned", () => {
     const lines = formatOptions(
@@ -46,33 +46,33 @@ describe("formatOptions", () => {
       ],
       NOW
     );
-    expect(lines[0]).toBe("● short            │    w:9 │ /work/a │ 20s ago");
-    expect(lines[1]).toBe("● much longer name │ work:2 │ /work/a │  2d ago");
+    expect(lines[0]).toBe("○ short            │    w:9 │ /work/a │ 20s ago");
+    expect(lines[1]).toBe("○ much longer name │ work:2 │ /work/a │  2d ago");
   });
-  test("scan entry uses hollow dot and cwd basename", () => {
+  test("entry without name falls back to cwd basename", () => {
     const [line] = formatOptions([entry({ source: "scan", name: undefined })], NOW);
     expect(line.startsWith("○ a ")).toBe(true);
   });
   test("names longer than 32 chars truncated with …", () => {
     const [line] = formatOptions([entry({ name: "x".repeat(40) })], NOW);
-    expect(line.startsWith("● " + "x".repeat(31) + "… ")).toBe(true);
+    expect(line.startsWith("○ " + "x".repeat(31) + "… ")).toBe(true);
   });
 });
 
 describe("formatOptions currentPaneId", () => {
-  test("entry matching currentPaneId gets [current] suffix", () => {
+  test("current entry gets filled dot, no [current] suffix", () => {
     const [line] = formatOptions([entry({ name: "here" })], NOW, "%2");
-    expect(line).toBe("● here │ work:2 │ /work/a │ 2m ago [current]");
+    expect(line).toBe("● here │ work:2 │ /work/a │ 2m ago");
   });
-  test("non-matching entries get no suffix", () => {
+  test("non-current entries get hollow dot", () => {
     const [line] = formatOptions([entry({ name: "there" })], NOW, "%99");
-    expect(line).toBe("● there │ work:2 │ /work/a │ 2m ago");
+    expect(line).toBe("○ there │ work:2 │ /work/a │ 2m ago");
   });
-  test("omitted currentPaneId marks nothing", () => {
+  test("omitted currentPaneId makes all dots hollow", () => {
     const [line] = formatOptions([entry({ name: "plain" })], NOW);
-    expect(line.endsWith("[current]")).toBe(false);
+    expect(line.startsWith("○ ")).toBe(true);
   });
-  test("marker does not shift column alignment of other rows", () => {
+  test("current dot does not shift column alignment of other rows", () => {
     const lines = formatOptions(
       [
         entry({ name: "cur" }),
@@ -81,11 +81,8 @@ describe("formatOptions currentPaneId", () => {
       NOW,
       "%2"
     );
-    // both lines share identical text up to end of age column
-    const ageColEnd = (l: string) => l.indexOf("2m ago") + "2m ago".length;
-    expect(lines[0].slice(0, ageColEnd(lines[0]))).toBe("● cur   │ work:2 │ /work/a │ 2m ago");
-    expect(lines[1].slice(0, ageColEnd(lines[1]))).toBe("● other │ work:2 │ /work/a │ 2m ago");
-    expect(lines[0].endsWith(" [current]")).toBe(true);
+    expect(lines[0]).toBe("● cur   │ work:2 │ /work/a │ 2m ago");
+    expect(lines[1]).toBe("○ other │ work:2 │ /work/a │ 2m ago");
   });
 });
 
@@ -118,9 +115,9 @@ describe("shortenCwd", () => {
 describe("formatOptions cwd column", () => {
   test("renders cwd between target and age", () => {
     const [line] = formatOptions([entry({ name: "api", cwd: process.env.HOME + "/work/api" })], NOW);
-    expect(line).toBe("● api │ work:2 │ ~/work/api │ 2m ago");
+    expect(line).toBe("○ api │ work:2 │ ~/work/api │ 2m ago");
   });
-  test("cwd column padded to longest cwd, marker still last", () => {
+  test("cwd column padded to longest cwd, current entry gets filled dot", () => {
     const lines = formatOptions(
       [
         entry({ name: "a", cwd: "/tmp" }),
@@ -129,7 +126,7 @@ describe("formatOptions cwd column", () => {
       NOW,
       "%3"
     );
-    expect(lines[0]).toBe("● a │ work:2 │ /tmp                │ 2m ago");
-    expect(lines[1]).toBe("● b │ work:2 │ ~/work/pi-tmux-conf │ 2m ago [current]");
+    expect(lines[0]).toBe("○ a │ work:2 │ /tmp                │ 2m ago");
+    expect(lines[1]).toBe("● b │ work:2 │ ~/work/pi-tmux-conf │ 2m ago");
   });
 });

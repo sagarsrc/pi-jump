@@ -134,7 +134,7 @@ describe("JumpOverlay", () => {
     expect(joined).toContain("pi-jump");
     expect(joined).toContain("api-refactor");
     expect(joined).toContain("cryptobot");
-    expect(joined).toContain("[current]");
+    expect(joined).toContain("● api-refactor");
     expect(joined).toContain("2/2");
     expect(lines.every((l) => l.length <= WIDTH)).toBe(true);
   });
@@ -473,7 +473,7 @@ describe("uniform column plan (padding consistency)", () => {
       entry({ piSessionId: "s2", tmuxPaneId: "%7", name: "b", cwd: "/tmp", tmuxSession: "w", tmuxWindow: "2" }),
     ]);
     const lines = overlay.render(60);
-    const rows = lines.filter((l) => l.includes("●"));
+    const rows = lines.filter((l) => l.includes("●") || l.includes("○"));
     expect(rows.length).toBe(2);
     const seps = rows.map((r) => (r.match(/│/g) ?? []).length);
     expect(seps[0]).toBe(seps[1]);
@@ -485,7 +485,7 @@ describe("uniform column plan (padding consistency)", () => {
       entry({ piSessionId: "s2", tmuxPaneId: "%7", name: "b", cwd: "/var" }),
     ]);
     const lines = overlay.render(120);
-    const rows = lines.filter((l) => l.includes("●"));
+    const rows = lines.filter((l) => l.includes("●") || l.includes("○"));
     const seps = rows.map((r) => (r.match(/│/g) ?? []).length);
     // box borders (2) + 3 column separators per row
     expect(seps).toEqual([5, 5]);
