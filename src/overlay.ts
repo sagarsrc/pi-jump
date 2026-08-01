@@ -1,13 +1,14 @@
 import { basename } from "node:path";
-import { matchesKey, Key, truncateToWidth } from "@earendil-works/pi-tui";
+import { matchesKey, Key, truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import type { DiscoveredEntry } from "./discover";
 import { computeColumnWidths, formatRow, rowParts, truncate } from "./format";
 import { fuzzyFilter } from "./fuzzy";
-import { cleanPreview, PREVIEW_LINES } from "./preview";
+import { cleanPreview } from "./preview";
 import { boxBottom, labelDivider } from "./box";
 
 export const MODAL_LIST_ROWS = 8;
 export const MODAL_PREVIEW_ROWS = 12;
+export const PREVIEW_CHROME_CROP = 4;
 export const MODAL_FRAME_LINES = 1 + 1 + 1 + MODAL_LIST_ROWS + 1 + MODAL_PREVIEW_ROWS + 1 + 1;
 
 export interface JumpTheme {
@@ -28,6 +29,10 @@ export interface JumpOverlayOptions {
   requestRender: () => void;
   theme: JumpTheme;
   previewLabel?: (e: DiscoveredEntry) => string;
+}
+
+function padToWidth(s: string, w: number): string {
+  return s + " ".repeat(Math.max(0, w - visibleWidth(s)));
 }
 
 export class JumpOverlay {
@@ -131,7 +136,10 @@ export class JumpOverlay {
       this.previewLines = ["(no preview)"];
       return;
     }
-    const cleaned = cleanPreview(raw, PREVIEW_LINES);
+    let cleaned = cleanPreview(raw, MODAL_PREVIEW_ROWS, PREVIEW_CHROME_CROP);
+    if (cleaned.length === 0) {
+      cleaned = cleanPreview(raw, MODAL_PREVIEW_ROWS, 0);
+    }
     this.previewLines = cleaned.length > 0 ? cleaned : ["(empty pane)"];
   }
 
@@ -145,10 +153,9 @@ export class JumpOverlay {
 
     const top = this.renderTop(innerW);
     const queryRow = this.borderRow(
-      theme.fg("text", truncateToWidth(`❯ ${this.query}█`, innerW).padEnd(innerW)),
-      innerW
+      theme.fg("text", padToWidth(truncateToWidth(`❯ ${this.query}█`, innerW), innerW))
     );
-    const dividerRow = this.borderRow(theme.fg("border", "─".repeat(innerW)), innerW);
+    const dividerRow = this.borderRow(theme.fg("border", "─".repeat(innerW)));
 
     const listRows = this.renderListRows(innerW);
     const previewLabelRow = this.renderPreviewLabel(innerW);
@@ -171,9 +178,11 @@ export class JumpOverlay {
   private renderTop(innerW: number): string {
     const theme = this.opts.theme;
     const titleStr = " ◈ pi-jump ";
-    const titleFit = titleStr.slice(0, innerW);
-    const left = Math.max(0, Math.floor((innerW - titleFit.length) / 2));
-    const right = Math.max(0, innerW - titleFit.length - left);
+    const titleW = visibleWidth(titleStr);
+    const titleFit = titleW > innerW ? truncateToWidth(titleStr, innerW) : titleStr;
+    const titleFitW = visibleWidth(titleFit);
+    const left = Math.max(0, Math.floor((innerW - titleFitW) / 2));
+    const right = Math.max(0, innerW - titleFitW - left);
     return (
       theme.fg("border", "╭" + "─".repeat(left)) +
       theme.fg("accent", titleFit) +
@@ -181,7 +190,7 @@ export class JumpOverlay {
     );
   }
 
-  private borderRow(content: string, innerW: number): string {
+  private borderRow(content: string): string {
     const theme = this.opts.theme;
     return theme.fg("border", "│") + content + theme.fg("border", "│");
   }
@@ -211,11 +220,11 @@ export class JumpOverlay {
       const isSelected = list.length > 0 && actualIndex === sel;
       const prefix = isSelected ? "→ " : "  ";
       const rawLine = optionLines[actualIndex] ?? "";
-      const full = truncateToWidth(prefix + rawLine, innerW).padEnd(innerW);
+      const full = padToWidth(truncateToWidth(prefix + rawLine, innerW), innerW);
       const styled = isSelected
         ? theme.bg("selectedBg", theme.fg("text", full))
         : theme.fg("text", full);
-      rows.push(this.borderRow(styled, innerW));
+      rows.push(this.borderRow(styled));
     }
     return rows;
   }
@@ -225,7 +234,7 @@ export class JumpOverlay {
     const e = this.currentEntry();
     const label = e ? this.previewLabel(e) : "preview";
     const content = theme.fg("muted", labelDivider(label, innerW));
-    return this.borderRow(content, innerW);
+    return this.borderRow(content);
   }
 
   private renderPreviewRows(innerW: number): string[] {
@@ -233,8 +242,8 @@ export class JumpOverlay {
     const rows: string[] = [];
     for (let i = 0; i < MODAL_PREVIEW_ROWS; i++) {
       const line = this.previewLines[i] ?? "";
-      const content = theme.fg("muted", truncateToWidth(line, innerW).padEnd(innerW));
-      rows.push(this.borderRow(content, innerW));
+      const content = theme.fg("muted", padToWidth(truncateToWidth(line, innerW), innerW));
+      rows.push(this.borderRow(content));
     }
     return rows;
   }
@@ -246,36 +255,36 @@ export class JumpOverlay {
     const hints = "↑↓ move · type to filter · ⏎ jump · esc close";
     const content = theme.fg(
       "muted",
-      truncateToWidth(`${count}  ${hints}`, innerW).padEnd(innerW)
+      padToWidth(truncateToWidth(`${count}  ${hints}`, innerW), innerW)
     );
-    return this.borderRow(content, innerW);
+    return this.borderRow(content);
   }
 
   private renderRow(parts: ReturnType<typeof rowParts>, contentWidth: number): string {
     const full = formatRow(parts, this.widths);
-    if (full.length <= contentWidth) return full;
+    if (visibleWidth(full) <= contentWidth) return full;
 
     const sep = " │ ";
-    const coreOverhead = `${parts.dot} `.length + sep.length + parts.target.length;
-    const nameBudget = Math.max(0, contentWidth - coreOverhead);
+    const dotPrefix = `${parts.dot} `;
+    const core = dotPrefix + sep + parts.target;
+    const coreW = visibleWidth(core);
+    const nameBudget = Math.max(0, contentWidth - coreW);
     const name =
-      nameBudget > 0
-        ? nameBudget < parts.name.length
-          ? truncate(parts.name, nameBudget)
-          : parts.name
-        : "";
-    let row = `${parts.dot} ${name}${sep}${parts.target}`;
+      nameBudget > 0 && visibleWidth(parts.name) > nameBudget
+        ? truncateToWidth(parts.name, nameBudget, "")
+        : parts.name;
+    let row = dotPrefix + name + sep + parts.target;
 
-    const withAge = `${row}${sep}${parts.age.padStart(this.widths.ageW)}`;
-    if (withAge.length <= contentWidth) {
+    const withAge = row + sep + parts.age.padStart(this.widths.ageW);
+    if (visibleWidth(withAge) <= contentWidth) {
       row = withAge;
     }
 
     if (parts.current) {
-      const withMarker = `${row} [current]`;
-      if (withMarker.length <= contentWidth) row = withMarker;
+      const withMarker = row + " [current]";
+      if (visibleWidth(withMarker) <= contentWidth) row = withMarker;
     }
 
-    return truncateToWidth(row, contentWidth);
+    return truncateToWidth(row, contentWidth, "");
   }
 }

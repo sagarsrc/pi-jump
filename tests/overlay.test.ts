@@ -1,12 +1,51 @@
 import { describe, test, expect, vi } from "vitest";
-import { JumpOverlay, MODAL_LIST_ROWS, MODAL_PREVIEW_ROWS, MODAL_FRAME_LINES } from "../src/overlay";
+import { JumpOverlay, MODAL_LIST_ROWS, MODAL_PREVIEW_ROWS, MODAL_FRAME_LINES, PREVIEW_CHROME_CROP } from "../src/overlay";
 import type { JumpOverlayOptions, JumpTheme } from "../src/overlay";
 import type { DiscoveredEntry } from "../src/discover";
+import { visibleWidth } from "@earendil-works/pi-tui";
 
 // Minimal mock for the peer/bundled pi-tui package so unit tests resolve.
 // In the real TUI, handleInput receives raw terminal byte sequences; this test
 // harness sends the canonical key-name strings that matchesKey() would parse.
 vi.mock("@earendil-works/pi-tui", () => {
+  function codepointWidth(ch: string) {
+    const cp = ch.codePointAt(0)!;
+    // Coarse wide-char approximation: CJK ideographs, Kana, Hangul syllables,
+    // fullwidth forms, and emoji are 2 columns; everything else is 1. This keeps
+    // arrows/bullets/box-drawing as 1-column symbols, matching the real pi-tui
+    // wcwidth behavior for these glyphs while still catching CJK/emoji overflow.
+    if (cp >= 0x4E00 && cp <= 0x9FFF) return 2; // CJK Unified Ideographs
+    if (cp >= 0x3400 && cp <= 0x4DBF) return 2; // CJK Extension A
+    if (cp >= 0x3040 && cp <= 0x309F) return 2; // Hiragana
+    if (cp >= 0x30A0 && cp <= 0x30FF) return 2; // Katakana
+    if (cp >= 0xAC00 && cp <= 0xD7AF) return 2; // Hangul Syllables
+    if (cp >= 0xFF01 && cp <= 0xFF60) return 2; // Fullwidth ASCII
+    if (cp >= 0xFFE0 && cp <= 0xFFE6) return 2; // Fullwidth symbol variants
+    if (cp >= 0x1F000) return 2; // Emoji and other supplemental planes
+    return 1;
+  }
+
+  function visibleWidth(s: string) {
+    return [...s].reduce((acc, ch) => acc + codepointWidth(ch), 0);
+  }
+
+  // Coarse approximation of pi-tui's visible-width truncation. The default
+  // ellipsis is empty in tests so assertions focus on content fit, not the
+  // truncation marker; the real helper uses "…".
+  function truncateToWidth(s: string, width: number, ellipsis = "") {
+    if (visibleWidth(s) <= width) return s;
+    const ellipsisW = visibleWidth(ellipsis);
+    let budget = Math.max(0, width - ellipsisW);
+    let result = "";
+    for (const ch of s) {
+      const chW = codepointWidth(ch);
+      if (chW > budget) break;
+      result += ch;
+      budget -= chW;
+    }
+    return result + ellipsis;
+  }
+
   function parseKeyId(keyId: string) {
     const parts = keyId.toLowerCase().split("+");
     return {
@@ -39,14 +78,8 @@ vi.mock("@earendil-works/pi-tui", () => {
       backspace: "backspace",
       ctrl: (k: string) => `ctrl+${k}`,
     },
-    truncateToWidth(s: string, width: number, ellipsis = "…") {
-      if (s.length <= width) return s;
-      const take = Math.max(0, width - ellipsis.length);
-      return s.slice(0, take) + ellipsis;
-    },
-    visibleWidth(s: string) {
-      return s.length;
-    },
+    truncateToWidth,
+    visibleWidth,
   };
 });
 
@@ -309,6 +342,27 @@ describe("JumpOverlay", () => {
     expect(row).toMatch(/│ {10,}s:1/);
   });
 
+  test("wide-char session name keeps visible width within terminal bounds", () => {
+    const { overlay } = makeOverlay([entry({ name: "日本語セッション" })]);
+    for (const w of [40, 80]) {
+      const row = overlay.render(w).find((l) => l.includes("日本語セッション"));
+      expect(row).toBeDefined();
+      expect(visibleWidth(row!)).toBeLessThanOrEqual(w);
+    }
+  });
+
+  test("preview chrome lines are cropped before display", () => {
+    const chrome = ["--- status ---", "--- command --", "--- pane title", "--- prompt ---"];
+    const body = Array.from({ length: MODAL_PREVIEW_ROWS - PREVIEW_CHROME_CROP }, (_, i) => `body line ${i + 1}`);
+    const { overlay } = makeOverlay([entry()], [...body, ...chrome].join("\n"));
+    const rendered = overlay.render(80).join("\n");
+    for (const line of chrome) {
+      expect(rendered).not.toContain(line);
+    }
+    expect(rendered).toContain("body line 1");
+    expect(rendered).toContain(`body line ${MODAL_PREVIEW_ROWS - PREVIEW_CHROME_CROP}`);
+  });
+
   test("currentEntry does not mutate selected", () => {
     const { overlay } = makeOverlay([entry(), entry({ piSessionId: "s2", tmuxPaneId: "%7", name: "cryptobot", tmuxSession: "fun", tmuxWindow: "1" })]);
     const o = overlay as unknown as Record<string, any>;
@@ -332,8 +386,6 @@ describe("JumpOverlay", () => {
 });
 
 describe("JumpOverlay modal frame", () => {
-  const identityTheme = { fg: (_c: string, t: string) => t, bg: (_c: string, t: string) => t };
-
   test("frame has exact constant line count", () => {
     const { overlay } = makeOverlay([entry()]);
     expect(overlay.render(80).length).toBe(MODAL_FRAME_LINES);
