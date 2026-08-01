@@ -1,6 +1,6 @@
 {
   "name": "pi-jump",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "Jump between running pi sessions across tmux windows — a session switcher extension for the pi coding agent",
   "license": "MIT",
   "type": "module",
