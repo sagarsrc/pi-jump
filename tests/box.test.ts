@@ -8,6 +8,15 @@ describe("boxTop", () => {
   test("width is exact", () => {
     expect(boxTop("x", 40)).toHaveLength(42); // innerW + 2 borders
   });
+  test("truncates oversized title to keep exact width", () => {
+    const result = boxTop("a very long title here", 10);
+    expect(result).toHaveLength(12); // innerW + 2 borders
+    expect(result.startsWith("╭")).toBe(true);
+    expect(result.endsWith("╮")).toBe(true);
+  });
+  test("truncates even with tiny inner width", () => {
+    expect(boxTop("x", 2)).toHaveLength(4); // innerW + 2 borders
+  });
 });
 
 describe("boxBottom", () => {

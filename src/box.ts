@@ -1,8 +1,11 @@
 export function boxTop(title: string, innerW: number): string {
-  const titleStr = ` ${title} `.trim().length > 0 ? ` ${title} ` : "";
+  let titleStr = ` ${title} `.trim().length > 0 ? ` ${title} ` : "";
+  if (titleStr.length > innerW) {
+    titleStr = titleStr.slice(0, innerW);
+  }
   const left = Math.floor((innerW - titleStr.length) / 2);
-  const right = Math.max(0, innerW - titleStr.length - left);
-  return `╭${"─".repeat(Math.max(0, left))}${titleStr}${"─".repeat(right)}╮`;
+  const right = innerW - titleStr.length - left;
+  return `╭${"─".repeat(left)}${titleStr}${"─".repeat(right)}╮`;
 }
 
 export function boxBottom(innerW: number): string {
