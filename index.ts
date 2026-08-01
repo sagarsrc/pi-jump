@@ -1,5 +1,9 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { homedir } from "node:os";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+
+const execFileP = promisify(execFile);
 import { join } from "node:path";
 import {
   loadRegistry,
@@ -123,15 +127,30 @@ export default function (pi: ExtensionAPI) {
             return;
           }
 
+          // Prefetch all pane previews BEFORE opening the overlay: pi's TUI
+          // repaints custom components only on input events, so async previews
+          // would never become visible. Panes are few and capture-pane is ~10ms.
+          const previews = new Map<string, string>();
+          await Promise.all(
+            entries.map(async (e) => {
+              try {
+                const { stdout } = await execFileP(
+                  "tmux",
+                  ["capture-pane", "-p", "-t", e.tmuxPaneId, "-S", "-25"],
+                  { timeout: 2000 }
+                );
+                previews.set(e.tmuxPaneId, stdout);
+              } catch {
+                // Dead/inaccessible pane -> no preview entry.
+              }
+            })
+          );
+
           const chosen = await ctx.ui.custom<DiscoveredEntry | null>((tui, _theme, _kb, done) => {
             return new JumpOverlay({
               entries,
               currentPaneId: selfCoords?.tmuxPaneId,
-              fetchPreview: async (paneId) => {
-                const r = await pi.exec("tmux", ["capture-pane", "-p", "-t", paneId, "-S", "-25"], { timeout: 2000 });
-                if (r.code !== 0) throw new Error(r.stderr.trim() || "capture-pane failed");
-                return r.stdout;
-              },
+              getPreview: (paneId) => previews.get(paneId),
               onDone: done,
               requestRender: () => tui.requestRender(),
             });

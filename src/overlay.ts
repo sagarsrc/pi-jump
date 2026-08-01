@@ -10,20 +10,20 @@ const MAX_LIST_ROWS = 10;
 export interface JumpOverlayOptions {
   entries: DiscoveredEntry[];
   currentPaneId?: string;
-  fetchPreview: (paneId: string) => Promise<string>;
+  /**
+   * Synchronous preview source. Previews MUST be prefetched before the overlay
+   * opens: pi's TUI only repaints custom components on input events, so an
+   * async preview that resolves later never becomes visible.
+   */
+  getPreview: (paneId: string) => string | undefined;
   onDone: (entry: DiscoveredEntry | null) => void;
   requestRender: () => void;
-  previewDelayMs?: number;
 }
 
 export class JumpOverlay {
   private query = "";
   private selected = 0;
   private previewLines: string[] = [];
-  private previewToken = 0;
-  private timer?: ReturnType<typeof setTimeout>;
-  private pending: Promise<void> = Promise.resolve();
-  private pendingResolve?: () => void;
   private cachedFiltered?: DiscoveredEntry[];
   private done = false;
   private widths: ReturnType<typeof computeColumnWidths>;
@@ -31,14 +31,7 @@ export class JumpOverlay {
   constructor(private opts: JumpOverlayOptions) {
     const parts = opts.entries.map((e) => rowParts(e, new Date(), opts.currentPaneId));
     this.widths = computeColumnWidths(parts);
-    this.schedulePreview();
-  }
-
-  dispose(): void {
-    if (this.timer) {
-      clearTimeout(this.timer);
-      this.timer = undefined;
-    }
+    this.loadPreview();
   }
 
   private filtered(): DiscoveredEntry[] {
@@ -64,16 +57,14 @@ export class JumpOverlay {
     if (matchesKey(data, Key.enter)) {
       const e = this.currentEntry();
       if (e) {
-        this.dispose();
-        this.opts.onDone(e);
         this.done = true;
+        this.opts.onDone(e);
       }
       return;
     }
     if (matchesKey(data, Key.escape) || matchesKey(data, Key.ctrl("c"))) {
-      this.dispose();
-      this.opts.onDone(null);
       this.done = true;
+      this.opts.onDone(null);
       return;
     }
     if (matchesKey(data, Key.up)) {
@@ -110,51 +101,23 @@ export class JumpOverlay {
   }
 
   private afterNav(): void {
+    this.loadPreview();
     this.opts.requestRender();
-    this.schedulePreview();
   }
 
-  private schedulePreview(): void {
-    if (this.timer) clearTimeout(this.timer);
-    if (this.pendingResolve) {
-      this.pendingResolve();
-      this.pendingResolve = undefined;
+  private loadPreview(): void {
+    const e = this.currentEntry();
+    if (!e) {
+      this.previewLines = [];
+      return;
     }
-    const token = ++this.previewToken;
-    const delay = this.opts.previewDelayMs ?? 150;
-    this.pending = new Promise<void>((resolve) => {
-      this.pendingResolve = resolve;
-      this.timer = setTimeout(async () => {
-        if (token !== this.previewToken) {
-          resolve();
-          return;
-        }
-        const e = this.currentEntry();
-        if (!e) {
-          this.previewLines = [];
-          this.opts.requestRender();
-          resolve();
-          return;
-        }
-        try {
-          const raw = await this.opts.fetchPreview(e.tmuxPaneId);
-          if (token !== this.previewToken) {
-            resolve();
-            return;
-          }
-          const cleaned = cleanPreview(raw, PREVIEW_LINES);
-          this.previewLines = cleaned.length > 0 ? cleaned : ["(empty pane)"];
-        } catch {
-          if (token === this.previewToken) this.previewLines = ["(no preview)"];
-        }
-        this.opts.requestRender();
-        resolve();
-      }, delay);
-    });
-  }
-
-  waitForPreview(): Promise<void> {
-    return this.pending;
+    const raw = this.opts.getPreview(e.tmuxPaneId);
+    if (raw === undefined) {
+      this.previewLines = ["(no preview)"];
+      return;
+    }
+    const cleaned = cleanPreview(raw, PREVIEW_LINES);
+    this.previewLines = cleaned.length > 0 ? cleaned : ["(empty pane)"];
   }
 
   invalidate(): void {
@@ -170,8 +133,6 @@ export class JumpOverlay {
       this.renderRow(rowParts(e, now, this.opts.currentPaneId), contentWidth)
     );
 
-    // Stacked layout: list rows occupy full width, preview block below a divider.
-    // This avoids the side-by-side layout that would truncate long tmux targets.
     const title = truncateToWidth("Jump to pi session", width);
     const queryLine = truncateToWidth(`> ${this.query}`, width);
     const divider = "─".repeat(Math.min(width, 20));
@@ -189,15 +150,26 @@ export class JumpOverlay {
       );
     }
     const visibleLines = optionLines.slice(start, start + windowSize);
-    const listRows = visibleLines.map((line, i) => {
+
+    // Constant frame: exactly MAX_LIST_ROWS list rows, blank-padded.
+    const listRows: string[] = [];
+    for (let i = 0; i < windowSize; i++) {
+      const line = visibleLines[i];
+      if (line === undefined) {
+        listRows.push("");
+        continue;
+      }
       const actualIndex = start + i;
       const prefix = actualIndex === sel ? "→ " : "  ";
-      return truncateToWidth(prefix + line, width);
-    });
+      listRows.push(truncateToWidth(prefix + line, width));
+    }
 
-    const previewRows = this.previewLines.map((line) =>
-      truncateToWidth(line, width)
-    );
+    // Constant frame: exactly PREVIEW_LINES preview rows, blank-padded.
+    const previewRows: string[] = [];
+    for (let i = 0; i < PREVIEW_LINES; i++) {
+      const line = this.previewLines[i];
+      previewRows.push(line !== undefined ? truncateToWidth(line, width) : "");
+    }
 
     return [
       title,

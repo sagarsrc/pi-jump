@@ -63,15 +63,14 @@ const entry = (over: Partial<DiscoveredEntry> = {}): DiscoveredEntry => ({
   ...over,
 });
 
-function makeOverlay(entries: DiscoveredEntry[], previewText = "$ npm run dev") {
+function makeOverlay(entries: DiscoveredEntry[], previewText: string | undefined = "$ npm run dev") {
   const onDone = vi.fn();
   const overlay = new JumpOverlay({
     entries,
     currentPaneId: "%3",
-    fetchPreview: async () => previewText,
+    getPreview: () => previewText,
     onDone,
     requestRender: () => {},
-    previewDelayMs: 0,
   });
   return { overlay, onDone };
 }
@@ -79,9 +78,8 @@ function makeOverlay(entries: DiscoveredEntry[], previewText = "$ npm run dev") 
 const WIDTH = 80;
 
 describe("JumpOverlay", () => {
-  test("initial render shows title, query line, all entries, footer", async () => {
+  test("initial render shows title, query line, all entries, footer", () => {
     const { overlay } = makeOverlay([entry(), entry({ piSessionId: "s2", tmuxPaneId: "%7", name: "cryptobot", tmuxSession: "fun", tmuxWindow: "1" })]);
-    await overlay.waitForPreview();
     const lines = overlay.render(WIDTH);
     const joined = lines.join("\n");
     expect(joined).toContain("Jump to pi session");
@@ -92,9 +90,8 @@ describe("JumpOverlay", () => {
     expect(lines.every((l) => l.length <= WIDTH)).toBe(true);
   });
 
-  test("typing filters the list", async () => {
+  test("typing filters the list", () => {
     const { overlay } = makeOverlay([entry(), entry({ piSessionId: "s2", tmuxPaneId: "%7", name: "cryptobot", tmuxSession: "fun", tmuxWindow: "1" })]);
-    await overlay.waitForPreview();
     for (const ch of "crypt") overlay.handleInput(ch);
     const joined = overlay.render(WIDTH).join("\n");
     expect(joined).toContain("cryptobot");
@@ -103,63 +100,61 @@ describe("JumpOverlay", () => {
     expect(joined).toContain("1/2");
   });
 
-  test("backspace restores filtered entries", async () => {
+  test("backspace restores filtered entries", () => {
     const { overlay } = makeOverlay([entry(), entry({ piSessionId: "s2", tmuxPaneId: "%7", name: "cryptobot", tmuxSession: "fun", tmuxWindow: "1" })]);
-    await overlay.waitForPreview();
     for (const ch of "zzz") overlay.handleInput(ch);
     expect(overlay.render(WIDTH).join("\n")).toContain("0/2");
     for (let i = 0; i < 3; i++) overlay.handleInput("backspace");
     expect(overlay.render(WIDTH).join("\n")).toContain("2/2");
   });
 
-  test("fuzzy also matches tmux session name", async () => {
+  test("fuzzy also matches tmux session name", () => {
     const { overlay } = makeOverlay([entry(), entry({ piSessionId: "s2", tmuxPaneId: "%7", name: "cryptobot", tmuxSession: "fun", tmuxWindow: "1" })]);
-    await overlay.waitForPreview();
     for (const ch of "fun") overlay.handleInput(ch);
     const joined = overlay.render(WIDTH).join("\n");
     expect(joined).toContain("cryptobot");
     expect(joined).not.toContain("api-refactor");
   });
 
-  test("enter on first entry calls onDone with it", async () => {
+  test("enter on first entry calls onDone with it", () => {
     const e1 = entry();
     const { overlay, onDone } = makeOverlay([e1]);
-    await overlay.waitForPreview();
     overlay.handleInput("enter");
     expect(onDone).toHaveBeenCalledWith(e1);
   });
 
-  test("down then enter selects the second entry", async () => {
+  test("down then enter selects the second entry", () => {
     const e2 = entry({ piSessionId: "s2", tmuxPaneId: "%7", name: "cryptobot", tmuxSession: "fun", tmuxWindow: "1" });
     const { overlay, onDone } = makeOverlay([entry(), e2]);
-    await overlay.waitForPreview();
     overlay.handleInput("down");
-    await overlay.waitForPreview();
     overlay.handleInput("enter");
     expect(onDone).toHaveBeenCalledWith(e2);
   });
 
-  test("escape calls onDone with null", async () => {
+  test("escape calls onDone with null", () => {
     const { overlay, onDone } = makeOverlay([entry()]);
-    await overlay.waitForPreview();
     overlay.handleInput("escape");
     expect(onDone).toHaveBeenCalledWith(null);
   });
 
-  test("enter with empty filtered list does nothing", async () => {
+  test("ctrl+c calls onDone with null", () => {
     const { overlay, onDone } = makeOverlay([entry()]);
-    await overlay.waitForPreview();
+    overlay.handleInput("ctrl+c");
+    expect(onDone).toHaveBeenCalledWith(null);
+  });
+
+  test("enter with empty filtered list does nothing", () => {
+    const { overlay, onDone } = makeOverlay([entry()]);
     for (const ch of "zzz") overlay.handleInput(ch);
     overlay.handleInput("enter");
     expect(onDone).not.toHaveBeenCalled();
   });
 
-  test("enter on empty filtered list does not lock overlay", async () => {
+  test("enter on empty filtered list does not lock overlay", () => {
     const { overlay, onDone } = makeOverlay([
       entry(),
       entry({ piSessionId: "s2", tmuxPaneId: "%7", name: "cryptobot", tmuxSession: "fun", tmuxWindow: "1" }),
     ]);
-    await overlay.waitForPreview();
     for (const ch of "zzz") overlay.handleInput(ch);
     overlay.handleInput("enter");
     expect(onDone).not.toHaveBeenCalled();
@@ -167,38 +162,56 @@ describe("JumpOverlay", () => {
     expect(overlay.render(WIDTH).join("\n")).toContain("2/2");
   });
 
-  test("preview text appears after waitForPreview", async () => {
+  test("preview text renders synchronously from getPreview", () => {
     const { overlay } = makeOverlay([entry()], "UNIQUE_PREVIEW_TEXT");
-    await overlay.waitForPreview();
     expect(overlay.render(WIDTH).join("\n")).toContain("UNIQUE_PREVIEW_TEXT");
   });
 
-  test("tmux target is never truncated in list rows", async () => {
+  test("preview follows selection", () => {
+    const onDone = vi.fn();
+    const previews = new Map([
+      ["%3", "FIRST_PANE"],
+      ["%7", "SECOND_PANE"],
+    ]);
+    const overlay = new JumpOverlay({
+      entries: [
+        entry(),
+        entry({ piSessionId: "s2", tmuxPaneId: "%7", name: "cryptobot", tmuxSession: "fun", tmuxWindow: "1" }),
+      ],
+      currentPaneId: "%3",
+      getPreview: (id) => previews.get(id),
+      onDone,
+      requestRender: () => {},
+    });
+    expect(overlay.render(WIDTH).join("\n")).toContain("FIRST_PANE");
+    overlay.handleInput("down");
+    expect(overlay.render(WIDTH).join("\n")).toContain("SECOND_PANE");
+    expect(overlay.render(WIDTH).join("\n")).not.toContain("FIRST_PANE");
+  });
+
+  test("missing preview renders '(no preview)'", () => {
+    const overlay = new JumpOverlay({
+      entries: [entry()],
+      currentPaneId: "%3",
+      getPreview: () => undefined,
+      onDone: vi.fn(),
+      requestRender: () => {},
+    });
+    expect(overlay.render(WIDTH).join("\n")).toContain("(no preview)");
+  });
+
+  test("empty preview renders '(empty pane)'", () => {
+    const { overlay } = makeOverlay([entry()], "\n\n");
+    expect(overlay.render(WIDTH).join("\n")).toContain("(empty pane)");
+  });
+
+  test("tmux target is never truncated in list rows", () => {
     const longSession = entry({ tmuxSession: "very-long-session-name-here", tmuxWindow: "12" });
     const { overlay } = makeOverlay([longSession]);
-    await overlay.waitForPreview();
     expect(overlay.render(50).join("\n")).toContain("very-long-session-name-here:12");
   });
 
-  test("stale empty-selection preview callback cannot wipe a newer preview", async () => {
-    const { overlay } = makeOverlay([entry()], "STALE_GUARD");
-    await overlay.waitForPreview();
-    expect(overlay.render(WIDTH).join("\n")).toContain("STALE_GUARD");
-
-    // Force an old empty-list callback to fire after a newer non-empty preview is in place.
-    const o = overlay as unknown as Record<string, any>;
-    o.query = "zzz";
-    o.schedulePreview();
-    // Let the empty-list timer fire (it is now stale because the next schedule replaces it).
-    await new Promise((r) => setTimeout(r, 30));
-    o.query = "";
-    o.schedulePreview();
-    await (overlay as any).waitForPreview();
-
-    expect(overlay.render(WIDTH).join("\n")).toContain("STALE_GUARD");
-  });
-
-  test("render scrolls to show at most MAX_LIST_ROWS and keeps selection visible", async () => {
+  test("render scrolls to show at most MAX_LIST_ROWS and keeps selection visible", () => {
     const entries = Array.from({ length: 15 }, (_, i) =>
       entry({
         piSessionId: `s${i + 1}`,
@@ -208,11 +221,9 @@ describe("JumpOverlay", () => {
       })
     );
     const { overlay } = makeOverlay(entries);
-    await overlay.waitForPreview();
 
     // Move selection to index 12.
     for (let i = 0; i < 12; i++) overlay.handleInput("down");
-    await overlay.waitForPreview();
 
     const lines = overlay.render(WIDTH);
     const firstDivider = lines.findIndex((l) => /^─+$/.test(l));
@@ -224,31 +235,29 @@ describe("JumpOverlay", () => {
     expect(lines.join("\n")).toContain("proj-13");
   });
 
-  test("width 40 keeps full tmux target when name is long", async () => {
+  test("width 40 keeps full tmux target when name is long", () => {
     const longName = "a-really-long-pi-session-name-name-name";
     const session = "very-long-session-name-here";
     const target = `${session}:12`;
     const { overlay } = makeOverlay([
       entry({ name: longName, tmuxSession: session, tmuxWindow: "12" }),
     ]);
-    await overlay.waitForPreview();
     const lines = overlay.render(40);
     const row = lines.find((l) => l.includes(target));
     expect(row).toBeDefined();
     expect(lines.every((l) => l.length <= 40)).toBe(true);
   });
 
-  test("width 30 truncates name but never the target", async () => {
+  test("width 30 truncates name but never the target", () => {
     const longName = "a-really-long-pi-session-name-name-name";
     const { overlay } = makeOverlay([entry({ name: longName, tmuxSession: "s", tmuxWindow: "1" })]);
-    await overlay.waitForPreview();
     const lines = overlay.render(30);
     const row = lines.find((l) => l.includes("s:1"));
     expect(row).toBeDefined();
     expect(lines.every((l) => l.length <= 30)).toBe(true);
   });
 
-  test("width 20 with pathologically long target never exceeds terminal width", async () => {
+  test("width 20 with pathologically long target never exceeds terminal width", () => {
     const { overlay } = makeOverlay([
       entry({
         name: "some-name",
@@ -256,17 +265,15 @@ describe("JumpOverlay", () => {
         tmuxWindow: "1",
       }),
     ]);
-    await overlay.waitForPreview();
     const lines = overlay.render(20);
     expect(lines.every((l) => l.length <= 20)).toBe(true);
   });
 
-  test("width 80 renders full row with all columns", async () => {
+  test("width 80 renders full row with all columns", () => {
     const { overlay } = makeOverlay([
       entry({ name: "api-refactor", cwd: "/work/api-refactor-long" }),
       entry({ piSessionId: "s2", tmuxPaneId: "%7", name: "cryptobot", tmuxSession: "fun", tmuxWindow: "1", cwd: "/work/fun/cryptobot" }),
     ]);
-    await overlay.waitForPreview();
     const lines = overlay.render(80);
     const row = lines.find((l) => l.includes("api-refactor"));
     expect(row).toBeDefined();
@@ -275,47 +282,15 @@ describe("JumpOverlay", () => {
     expect(lines.every((l) => l.length <= 80)).toBe(true);
   });
 
-  test("filtered rows reuse column widths from the full entry list", async () => {
+  test("filtered rows reuse column widths from the full entry list", () => {
     const { overlay } = makeOverlay([
       entry({ name: "short", tmuxSession: "s", tmuxWindow: "1" }),
       entry({ piSessionId: "s2", tmuxPaneId: "%7", name: "long", tmuxSession: "very-long-session-name-here", tmuxWindow: "12" }),
     ]);
-    await overlay.waitForPreview();
     for (const ch of "short") overlay.handleInput(ch);
     const lines = overlay.render(80);
     const row = lines.find((l) => l.includes("s:1"));
     expect(row).toMatch(/│ {10,}s:1/);
-  });
-
-  test("fetchPreview rejection renders '(no preview)'", async () => {
-    const onDone = vi.fn();
-    const overlay = new JumpOverlay({
-      entries: [entry()],
-      currentPaneId: "%3",
-      fetchPreview: async () => {
-        throw new Error("dead pane");
-      },
-      onDone,
-      requestRender: () => {},
-      previewDelayMs: 0,
-    });
-    await overlay.waitForPreview();
-    expect(overlay.render(80).join("\n")).toContain("(no preview)");
-  });
-
-  test("dispose clears pending preview timer", async () => {
-    const fetchPreview = vi.fn().mockResolvedValue("x");
-    const overlay = new JumpOverlay({
-      entries: [entry()],
-      currentPaneId: "%3",
-      fetchPreview,
-      onDone: vi.fn(),
-      requestRender: () => {},
-      previewDelayMs: 1000,
-    });
-    overlay.dispose();
-    await new Promise((r) => setTimeout(r, 50));
-    expect(fetchPreview).not.toHaveBeenCalled();
   });
 
   test("currentEntry does not mutate selected", () => {
@@ -338,11 +313,42 @@ describe("JumpOverlay", () => {
     overlay.handleInput("escape");
     expect(onDone).toHaveBeenCalledTimes(1);
   });
+});
 
-  test("superseded pending preview promise resolves instead of hanging", async () => {
+describe("JumpOverlay constant height (TUI clipping regression)", () => {
+  test("render line count is exactly the fixed frame size on open", () => {
     const { overlay } = makeOverlay([entry()]);
-    const pending = overlay.waitForPreview();
-    overlay.handleInput("a");
-    await expect(pending).resolves.toBeUndefined();
+    const before = overlay.render(WIDTH).length;
+    // title + query + divider + 10 list rows + divider + 20 preview rows + footer
+    expect(before).toBe(1 + 1 + 1 + 10 + 1 + 20 + 1);
+  });
+
+  test("render line count stays constant while filtering", () => {
+    const { overlay } = makeOverlay([
+      entry(),
+      entry({ piSessionId: "s2", tmuxPaneId: "%7", name: "cryptobot", tmuxSession: "fun", tmuxWindow: "1" }),
+    ]);
+    const before = overlay.render(WIDTH).length;
+    for (const ch of "crypt") overlay.handleInput(ch);
+    const filtered = overlay.render(WIDTH).length;
+    expect(filtered).toBe(before);
+  });
+
+  test("render line count stays constant when navigating", () => {
+    const { overlay } = makeOverlay([
+      entry(),
+      entry({ piSessionId: "s2", tmuxPaneId: "%7", name: "cryptobot", tmuxSession: "fun", tmuxWindow: "1" }),
+    ]);
+    const before = overlay.render(WIDTH).length;
+    overlay.handleInput("down");
+    expect(overlay.render(WIDTH).length).toBe(before);
+  });
+
+  test("list rows never exceed 10 even with 15 entries", () => {
+    const entries = Array.from({ length: 15 }, (_, i) =>
+      entry({ piSessionId: `s${i}`, tmuxPaneId: `%${i}`, name: `session-${i}` })
+    );
+    const { overlay } = makeOverlay(entries);
+    expect(overlay.render(WIDTH).length).toBe(1 + 1 + 1 + 10 + 1 + 20 + 1);
   });
 });
