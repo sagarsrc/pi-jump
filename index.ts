@@ -174,7 +174,19 @@ export default function (pi: ExtensionAPI) {
             return;
           }
 
-          const jumpR = await pi.exec("tmux", ["switch-client", "-t", jumpTarget(target)], { timeout: 3000 });
+          // Resolve the client that owns OUR pane — with multiple tmux clients
+          // attached, bare switch-client picks an arbitrary one.
+          let switchArgs = ["switch-client", "-t", jumpTarget(target)];
+          if (process.env.TMUX_PANE) {
+            const clientR = await pi.exec(
+              "tmux",
+              ["display-message", "-p", "-t", process.env.TMUX_PANE, "#{client_tty}"],
+              { timeout: 3000 }
+            );
+            const client = clientR.code === 0 ? clientR.stdout.trim() : "";
+            if (client) switchArgs = ["switch-client", "-c", client, "-t", jumpTarget(target)];
+          }
+          const jumpR = await pi.exec("tmux", switchArgs, { timeout: 3000 });
           if (jumpR.code === 0) {
             return;
           }
