@@ -44,9 +44,11 @@ Then `/reload` in any running pi (or start a new one). Requires pi to run **insi
 
 Pick a session → your tmux client switches to it. Dead sessions are pruned automatically; if your target dies mid-pick, the picker re-opens with a fresh list.
 
+**v2.1 picker:** a real modal that floats over your chat — bordered box, highlighted selection, live preview of the highlighted pane (its status line cropped out so you never confuse it with yours).
+
 **v2.0 picker superpowers:**
 - **Fuzzy filter** — just start typing; matches session names, directories, and tmux session names
-- **Live preview** — the highlighted session's pane content (last ~20 lines) renders below the list, refreshing as you move the cursor
+- **Live preview** — the highlighted session's pane content renders below the list, refreshing as you move the cursor
 
 Name your sessions with pi's built-in `/name` — the picker shows the name instead of the directory.
 
